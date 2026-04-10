@@ -1,39 +1,54 @@
 import axios from 'axios';
 
+// Browser-like headers to avoid blocks from Cloudflare-protected stores
 const HTTP_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (compatible; AdCreativeBot/1.0)',
-  'Accept': 'application/json, text/html',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Cache-Control': 'no-cache',
 };
 
 /**
- * Scrape a Shopify product URL and return a normalized product object.
- * Tries the product's own domain first, then resolves the myshopify domain as fallback.
+ * Scrape a Shopify product URL.
+ * Strategy order:
+ * 1. /products/{handle}.json  (fastest, works on most stores)
+ * 2. JSON-LD schema from page HTML (works on stores that block JSON endpoint)
+ * 3. Shopify window.__st / meta tags from HTML (last resort)
  */
 export async function scrapeShopifyProduct(url) {
   const handle = extractHandle(url);
   if (!handle) throw new Error('URL does not contain a Shopify product handle (/products/...)');
 
   const origin = new URL(url).origin;
-  const origins = [origin];
 
+  // Strategy 1: standard Shopify product JSON endpoint
+  const jsonProduct = await fetchProductJson(origin, handle);
+  if (jsonProduct) return normalizeProduct(jsonProduct, origin);
+
+  // Strategy 2: try myshopify domain for the JSON endpoint
   const myshopify = await resolveMyShopifyDomain(url);
-  if (myshopify && myshopify !== origin) origins.push(myshopify);
-
-  for (const base of origins) {
-    const product = await fetchProductJson(base, handle);
-    if (product) return normalizeProduct(product, base);
+  if (myshopify && myshopify !== origin) {
+    const jsonProduct2 = await fetchProductJson(myshopify, handle);
+    if (jsonProduct2) return normalizeProduct(jsonProduct2, myshopify);
   }
 
-  throw new Error(`Could not fetch Shopify product JSON for: ${url}`);
+  // Strategy 3: extract from page HTML (JSON-LD / embedded JSON)
+  const htmlProduct = await scrapeFromHtml(url, origin);
+  if (htmlProduct) return htmlProduct;
+
+  throw new Error(`Could not fetch product data from: ${url}. The store may block server-side requests.`);
 }
 
-// ── Helpers ────────────────────────────────────────────────────
+// ── Strategy implementations ───────────────────────────────────
 
-function extractHandle(url) {
+async function fetchProductJson(baseUrl, handle) {
   try {
-    const parts = new URL(url).pathname.split('/').filter(Boolean);
-    const idx = parts.indexOf('products');
-    if (idx !== -1 && parts[idx + 1]) return parts[idx + 1].split('?')[0];
+    const res = await axios.get(`${baseUrl}/products/${handle}.json`, {
+      headers: { ...HTTP_HEADERS, Accept: 'application/json' },
+      timeout: 15000,
+    });
+    if (res.data?.product) return res.data.product;
   } catch (_) {}
   return null;
 }
@@ -51,15 +66,101 @@ async function resolveMyShopifyDomain(pageUrl) {
   return null;
 }
 
-async function fetchProductJson(baseUrl, handle) {
+async function scrapeFromHtml(url, origin) {
+  let html;
   try {
-    const res = await axios.get(`${baseUrl}/products/${handle}.json`, {
+    const res = await axios.get(url, {
       headers: HTTP_HEADERS,
-      timeout: 15000,
+      timeout: 20000,
+      maxRedirects: 5,
     });
-    if (res.data?.product) return res.data.product;
-  } catch (_) {}
+    html = String(res.data);
+  } catch (_) {
+    return null;
+  }
+
+  // Try JSON-LD schema first — most reliable
+  const jsonLd = extractJsonLd(html);
+  if (jsonLd) return normalizeFromJsonLd(jsonLd, origin);
+
+  // Try embedded Shopify product JSON (window.ShopifyAnalytics or similar)
+  const embedded = extractEmbeddedJson(html);
+  if (embedded) return normalizeProduct(embedded, origin);
+
   return null;
+}
+
+function extractJsonLd(html) {
+  const matches = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  for (const match of matches) {
+    try {
+      const data = JSON.parse(match[1].trim());
+      const items = Array.isArray(data) ? data : [data];
+      // Handle @graph arrays
+      const allItems = items.flatMap(item => item['@graph'] || [item]);
+      const product = allItems.find(item =>
+        item['@type'] === 'Product' || item['@type'] === 'product'
+      );
+      if (product?.name) return product;
+    } catch (_) {}
+  }
+  return null;
+}
+
+function extractEmbeddedJson(html) {
+  // Some Shopify themes embed product JSON in a script tag
+  const patterns = [
+    /var\s+meta\s*=\s*(\{[\s\S]*?"product"[\s\S]*?\});/,
+    /window\.productJSON\s*=\s*(\{[\s\S]*?\});/,
+    /"product"\s*:\s*(\{[\s\S]*?"title"[\s\S]*?\})\s*[,}]/,
+  ];
+  for (const pattern of patterns) {
+    try {
+      const match = html.match(pattern);
+      if (match) {
+        const data = JSON.parse(match[1]);
+        if (data.title || data.product?.title) return data.product || data;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+// ── Normalizers ────────────────────────────────────────────────
+
+function normalizeFromJsonLd(raw, storeUrl) {
+  const offers = Array.isArray(raw.offers) ? raw.offers[0] : raw.offers;
+  const imgList = Array.isArray(raw.image) ? raw.image : (raw.image ? [raw.image] : []);
+  const images = imgList.map(src => ({
+    src: typeof src === 'string' ? src : (src.url || src.contentUrl || ''),
+    width: 800,
+    height: 800,
+    alt: raw.name || '',
+  })).filter(img => img.src);
+
+  const price = offers?.price ? `$${parseFloat(offers.price).toFixed(2)}` : 'N/A';
+  const description = (raw.description || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    title: raw.name || '',
+    handle: (raw.name || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+    vendor: raw.brand?.name || '',
+    product_type: raw.category || raw['@type'] || '',
+    tags: [],
+    store_url: storeUrl,
+    store_domain: new URL(storeUrl).hostname,
+    description,
+    price,
+    price_range: null,
+    variants: offers ? [{ title: 'Default', price: String(offers.price || ''), sku: '', available: offers.availability !== 'OutOfStock' }] : [],
+    images,
+    top_image_urls: images.slice(0, 5).map(img => img.src),
+    image_count: images.length,
+    created_at: null,
+  };
 }
 
 function normalizeProduct(raw, storeUrl) {
@@ -70,7 +171,6 @@ function normalizeProduct(raw, storeUrl) {
     alt: img.alt || '',
   })).filter(img => img.src);
 
-  // Sort highest resolution first — these are the most useful for brand analysis
   const sortedImages = [...images].sort((a, b) => (b.width * b.height) - (a.width * a.height));
 
   const variants = raw.variants || [];
@@ -105,8 +205,6 @@ function normalizeProduct(raw, storeUrl) {
       available: v.available !== false,
     })),
     images: sortedImages,
-    // Top image URLs passed to Claude Vision and Kie.ai as reference images
-    // Filter for reasonably high-res images (≥600px wide) to give Claude good detail
     top_image_urls: sortedImages
       .filter(img => img.width >= 600 || img.width === 0)
       .slice(0, 5)
@@ -114,4 +212,13 @@ function normalizeProduct(raw, storeUrl) {
     image_count: images.length,
     created_at: raw.created_at || null,
   };
+}
+
+function extractHandle(url) {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    const idx = parts.indexOf('products');
+    if (idx !== -1 && parts[idx + 1]) return parts[idx + 1].split('?')[0];
+  } catch (_) {}
+  return null;
 }
