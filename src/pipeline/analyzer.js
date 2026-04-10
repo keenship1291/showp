@@ -1,23 +1,14 @@
-import Anthropic from '@anthropic-ai/sdk';
 import axios from 'axios';
 import { config } from '../config.js';
-
-const client = new Anthropic({ apiKey: config.anthropicApiKey });
 
 const ANGLE_TYPES = ['benefit', 'emotional', 'social_proof', 'urgency', 'storytelling'];
 
 // ── Public API ─────────────────────────────────────────────────
 
 /**
- * Analyze product images with Claude Vision to extract brand identity.
- * Falls back to text-only analysis if images cannot be loaded.
+ * Analyze product to extract brand identity using OpenRouter (text-only).
  */
 export async function analyzeBrand(product) {
-  const imageData = await downloadImagesAsBase64(product.top_image_urls.slice(0, 3));
-
-  if (imageData.length > 0) {
-    return analyzeBrandWithVision(product, imageData);
-  }
   return analyzeBrandTextOnly(product);
 }
 
@@ -46,72 +37,11 @@ export async function generateConceptsForBrand(product, brandIdentity, count) {
 
 // ── Brand analysis ─────────────────────────────────────────────
 
-async function analyzeBrandWithVision(product, imageData) {
-  const content = [
-    ...imageData.map(img => ({
-      type: 'image',
-      source: { type: 'base64', media_type: img.mediaType, data: img.base64 },
-    })),
-    {
-      type: 'text',
-      text: buildBrandVisionPrompt(product),
-    },
-  ];
-
-  const response = await client.messages.create({
-    model: config.anthropicModel,
-    max_tokens: 1200,
-    messages: [{ role: 'user', content }],
-  });
-
-  return parseJSON(response.content[0].text, 'brand vision analysis');
-}
-
 async function analyzeBrandTextOnly(product) {
-  const response = await client.messages.create({
-    model: config.anthropicModel,
-    max_tokens: 900,
-    messages: [{
-      role: 'user',
-      content: buildBrandTextPrompt(product),
-    }],
-  });
-
-  return parseJSON(response.content[0].text, 'brand text analysis');
+  const text = await callLLM(buildBrandTextPrompt(product), 1200);
+  return parseJSON(text, 'brand analysis');
 }
 
-function buildBrandVisionPrompt(product) {
-  return `You are a brand identity specialist analyzing product images for an ad creative system.
-
-Product: "${product.title}"
-Vendor: ${product.vendor || 'unknown'}
-Category: ${product.product_type || 'general'}
-Price: ${product.price}${product.price_range ? ` (range: ${product.price_range})` : ''}
-Tags: ${product.tags.slice(0, 10).join(', ') || 'none'}
-
-Examine all ${product.top_image_urls.length > 1 ? 'images' : 'image'} carefully. Extract the complete visual brand identity.
-
-Return ONLY valid JSON (no markdown, no explanation):
-{
-  "brand_colors": {
-    "primary": "#HEXCODE",
-    "secondary": "#HEXCODE",
-    "accent": "#HEXCODE",
-    "background": "#HEXCODE",
-    "text": "#HEXCODE"
-  },
-  "visual_style": "one of exactly: luxury-minimalist | bold-energetic | warm-organic | clinical-clean | playful-vibrant | rustic-natural | modern-tech | elegant-premium",
-  "aesthetic_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "product_hero_description": "Precise visual description of the product — material, finish, shape, dimensions context, distinctive design elements. 3-4 sentences. This is used verbatim in image generation prompts.",
-  "packaging_description": "Typography style on label/packaging (serif/sans/script), label colors, logo style, text hierarchy, any embossing/foil/matte effects. 2 sentences.",
-  "photography_style": "The exact lighting type, background treatment, shadow style, shooting angle, depth of field. 2 sentences.",
-  "brand_personality": "Exactly 4 personality adjectives, comma-separated (e.g. trustworthy, premium, innovative, approachable)",
-  "dominant_color_mood": "e.g. warm earthy tones | cool clinical whites | bold high-contrast | soft blush pastels | deep rich jewel tones",
-  "recommended_ad_backgrounds": ["#HEX1", "#HEX2", "#HEX3"]
-}
-
-Be extremely precise with hex codes — sample from the product surface, label, packaging, and background areas.`;
-}
 
 function buildBrandTextPrompt(product) {
   return `You are a brand identity specialist. Infer the visual brand identity from this product's name, vendor, category, price point, and description.
@@ -160,14 +90,8 @@ async function generateConceptBatch(product, brand, assignments, startIdx) {
     .join('\n');
 
   const prompt = buildConceptsPrompt(product, brand, batchSize, anglesStr, startIdx);
-
-  const response = await client.messages.create({
-    model: config.anthropicModel,
-    max_tokens: 8192,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const concepts = parseJSON(response.content[0].text, `concept batch (${startIdx + 1}-${startIdx + batchSize})`);
+  const text = await callLLM(prompt, 8000);
+  const concepts = parseJSON(text, `concept batch (${startIdx + 1}-${startIdx + batchSize})`);
   return Array.isArray(concepts) ? concepts : [];
 }
 
@@ -254,30 +178,29 @@ Headlines must be under 40 characters. CTA under 20 characters.`;
 
 // ── Utilities ──────────────────────────────────────────────────
 
-async function downloadImagesAsBase64(urls) {
-  const results = [];
-  for (const url of urls) {
-    try {
-      const res = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 20000,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AdCreativeBot/1.0)' },
-        maxContentLength: 10 * 1024 * 1024, // 10MB max per image
-      });
-      const rawType = res.headers['content-type'] || 'image/jpeg';
-      // Claude Vision only accepts these media types
-      const mediaType = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-        .find(t => rawType.startsWith(t)) || 'image/jpeg';
+async function callLLM(prompt, maxTokens = 4096) {
+  const timeoutMs = maxTokens >= 6000 ? 150000 : 90000;
+  const res = await axios.post(
+    `${config.openrouterBaseUrl}/chat/completions`,
+    {
+      model: config.openrouterModel,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${config.openrouterApiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/keenship1291/showp',
+        'X-Title': 'Ad Creative Generator',
+      },
+      timeout: timeoutMs,
+    },
+  );
 
-      const base64 = Buffer.from(res.data).toString('base64');
-      results.push({ base64, mediaType });
-
-      if (results.length >= 3) break; // Claude Vision: max 3 images per call
-    } catch (err) {
-      console.warn(`[analyzer] Could not download image ${url}: ${err.message}`);
-    }
-  }
-  return results;
+  const text = res.data?.choices?.[0]?.message?.content || '';
+  if (!text) throw new Error('OpenRouter returned empty response');
+  return text;
 }
 
 function chunkArray(arr, size) {

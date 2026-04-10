@@ -20,9 +20,10 @@ export const config = {
   // Redis
   redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
 
-  // Anthropic (Claude) — used for brand vision analysis + concept generation
-  anthropicApiKey: required('ANTHROPIC_API_KEY'),
-  anthropicModel: optional('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+  // OpenRouter — used for brand analysis + concept generation
+  openrouterApiKey: required('OPENROUTER_API_KEY'),
+  openrouterModel: optional('OPENROUTER_MODEL', 'google/gemma-4-26b-a4b-it'),
+  openrouterBaseUrl: optional('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
 
   // Kie.ai — Banana image generation
   kieAiApiKey: required('KIE_AI_API_KEY'),
