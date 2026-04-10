@@ -188,14 +188,12 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
         {
           model: 'claude-haiku-4-5',
           stream: false,
-          max_tokens: maxTokens,
           messages: [{ role: 'user', content: prompt }],
         },
         {
           headers: {
             Authorization: `Bearer ${config.kieAiApiKey}`,
             'Content-Type': 'application/json',
-            'anthropic-version': '2023-06-01',
           },
           timeout: timeoutMs,
         },
