@@ -186,7 +186,7 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
       const res = await axios.post(
         `${config.llmBaseUrl}/messages`,
         {
-          model: 'claude-haiku-4-5',
+          model: 'claude-sonnet-4-6',
           stream: false,
           messages: [{ role: 'user', content: prompt }],
         },
