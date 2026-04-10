@@ -186,9 +186,8 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
       const res = await axios.post(
         `${config.llmBaseUrl}/chat/completions`,
         {
-          model: config.llmModel,
-          max_tokens: maxTokens,
-          messages: [{ role: 'user', content: prompt }],
+          stream: false,
+          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
         },
         {
           headers: {

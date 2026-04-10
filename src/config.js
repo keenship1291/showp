@@ -20,9 +20,8 @@ export const config = {
   // Redis
   redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
 
-  // Kie.ai LLM — used for brand analysis + concept generation (same API key as image gen)
-  llmModel: optional('LLM_MODEL', 'gemini-3.1-pro-openai'),
-  llmBaseUrl: optional('LLM_BASE_URL', 'https://api.kie.ai/api/v1'),
+  // Kie.ai Gemini LLM — uses same API key as image generation
+  llmBaseUrl: optional('LLM_BASE_URL', 'https://api.kie.ai/gemini-3.1-pro/v1'),
 
   // Kie.ai — Banana image generation
   kieAiApiKey: required('KIE_AI_API_KEY'),
