@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import { createBullConnection } from '../storage/redis.js';
-import { scrapeShopifyProduct } from '../pipeline/scraper.js';
+import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
 import { analyzeBrand, generateConceptsForBrand } from '../pipeline/analyzer.js';
 import { generateImages } from '../pipeline/generator.js';
 import { updateJob, appendImage } from '../storage/jobStore.js';
@@ -33,14 +33,27 @@ export async function startWorker() {
 }
 
 async function processJob(job) {
-  const { jobId, url, count, aspectRatio, resolution } = job.data;
+  const { jobId, url, count, aspectRatio, resolution, pageProductData } = job.data;
 
-  // ── Phase 1: Scrape ──────────────────────────────────────────
+  // ── Phase 1: Get product data ────────────────────────────────
   await updateJob(jobId, { status: 'scraping', phase: 'scraping' });
-  console.log(`[worker:${jobId}] Scraping: ${url}`);
 
-  const product = await scrapeShopifyProduct(url);
-  console.log(`[worker:${jobId}] Scraped: "${product.title}" (${product.images.length} images)`);
+  let product = null;
+
+  // Prefer browser-extracted data — no scraping, no blocks
+  if (pageProductData && (pageProductData.title || pageProductData.name)) {
+    product = normalizePageProductData(pageProductData, url);
+    if (product?.title) {
+      console.log(`[worker:${jobId}] Using page data: "${product.title}" (${product.images.length} images)`);
+    }
+  }
+
+  // Fall back to server-side scraping if page data was empty or missing
+  if (!product?.title) {
+    console.log(`[worker:${jobId}] Scraping: ${url}`);
+    product = await scrapeShopifyProduct(url);
+    console.log(`[worker:${jobId}] Scraped: "${product.title}" (${product.images.length} images)`);
+  }
 
   // ── Phase 2: Brand analysis (Claude Vision) ──────────────────
   await updateJob(jobId, {

@@ -1,5 +1,52 @@
 import axios from 'axios';
 
+/**
+ * Normalize product data that was extracted by the Chrome extension's content.js.
+ * This is the preferred path — no scraping needed, no blocks possible.
+ */
+export function normalizePageProductData(raw, pageUrl) {
+  const origin = new URL(pageUrl).origin;
+
+  // Handle JSON-LD format (@type: Product)
+  if (raw['@type'] === 'Product' || raw['@type'] === 'product') {
+    return normalizeFromJsonLd(raw, origin);
+  }
+
+  // Handle standard Shopify product JSON format
+  if (raw.title || raw.name) {
+    // If it has variants it's Shopify format, otherwise treat as minimal
+    if (raw.variants) return normalizeProduct(raw, origin);
+
+    // Minimal format built from DOM elements
+    const images = (raw.images || []).map(img => ({
+      src: img.src || img,
+      width: img.width || 800,
+      height: img.height || 800,
+      alt: img.alt || '',
+    })).filter(img => img.src);
+
+    return {
+      title: raw.title || raw.name || '',
+      handle: raw.handle || (raw.title || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+      vendor: raw.vendor || raw.brand?.name || '',
+      product_type: raw.product_type || '',
+      tags: raw.tags || [],
+      store_url: origin,
+      store_domain: new URL(origin).hostname,
+      description: (raw.description || raw.body_html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      price: raw.price || 'N/A',
+      price_range: null,
+      variants: [],
+      images,
+      top_image_urls: images.slice(0, 5).map(img => img.src),
+      image_count: images.length,
+      created_at: null,
+    };
+  }
+
+  return null;
+}
+
 // Browser-like headers to avoid blocks from Cloudflare-protected stores
 const HTTP_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
