@@ -184,34 +184,30 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await axios.post(
-        `${config.llmBaseUrl}/chat/completions`,
+        `${config.llmBaseUrl}/messages`,
         {
+          model: 'claude-haiku-4-5',
           stream: false,
-          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
         },
         {
           headers: {
             Authorization: `Bearer ${config.kieAiApiKey}`,
             'Content-Type': 'application/json',
+            'anthropic-version': '2023-06-01',
           },
           timeout: timeoutMs,
         },
       );
 
-      // Log full response on first attempt so we can debug structure issues
-      if (attempt === 0) {
-        console.log('[analyzer] Kie.ai LLM response:', JSON.stringify(res.data).substring(0, 500));
+      // Anthropic messages format: content is an array of blocks
+      const text = res.data?.content?.[0]?.text || '';
+
+      if (!text) {
+        console.error('[analyzer] Claude Haiku empty response. Raw:', JSON.stringify(res.data).substring(0, 400));
+        throw new Error(`Claude Haiku returned empty response. Raw: ${JSON.stringify(res.data).substring(0, 300)}`);
       }
-
-      const text = res.data?.choices?.[0]?.message?.content
-        || res.data?.choices?.[0]?.text
-        || res.data?.content
-        || res.data?.text
-        || res.data?.output
-        || res.data?.result
-        || '';
-
-      if (!text) throw new Error(`Kie.ai LLM returned empty response. Raw: ${JSON.stringify(res.data).substring(0, 300)}`);
       return text;
 
     } catch (err) {
@@ -222,7 +218,7 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
       if ((isRateLimit || isServerError) && attempt < retries) {
         // Exponential backoff: 5s, 10s, 20s, 40s
         const waitMs = 5000 * Math.pow(2, attempt);
-        console.warn(`[analyzer] OpenRouter ${status} — retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${retries})`);
+        console.warn(`[analyzer] Claude Haiku ${status} — retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${retries})`);
         await sleep(waitMs);
         continue;
       }

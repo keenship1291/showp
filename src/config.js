@@ -20,8 +20,8 @@ export const config = {
   // Redis
   redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
 
-  // Kie.ai Gemini LLM — uses same API key as image generation
-  llmBaseUrl: optional('LLM_BASE_URL', 'https://api.kie.ai/gemini-3.1-pro/v1'),
+  // Kie.ai Claude Haiku 4.5 — uses same API key as image generation
+  llmBaseUrl: optional('LLM_BASE_URL', 'https://api.kie.ai/claude/v1'),
 
   // Kie.ai — Banana image generation
   kieAiApiKey: required('KIE_AI_API_KEY'),
