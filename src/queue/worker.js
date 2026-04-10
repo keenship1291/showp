@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq';
 import { createBullConnection } from '../storage/redis.js';
 import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
-import { analyzeBrand, generateConceptsForBrand } from '../pipeline/analyzer.js';
+import { analyzeBrand, analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
 import { generateImages } from '../pipeline/generator.js';
 import { updateJob, appendImage } from '../storage/jobStore.js';
 
@@ -55,22 +55,26 @@ async function processJob(job) {
     console.log(`[worker:${jobId}] Scraped: "${product.title}" (${product.images.length} images)`);
   }
 
-  // ── Phase 2: Brand analysis (Claude Vision) ──────────────────
+  // ── Phase 2: Brand analysis + product knowledge ──────────────
   await updateJob(jobId, {
     status: 'analyzing',
     phase: 'analyzing',
     productTitle: product.title,
   });
-  console.log(`[worker:${jobId}] Analyzing brand identity...`);
+  console.log(`[worker:${jobId}] Analyzing brand identity + product knowledge...`);
 
-  const brandIdentity = await analyzeBrand(product);
+  const [brandIdentity, productKnowledge] = await Promise.all([
+    analyzeBrand(product),
+    analyzeProductKnowledge(product),
+  ]);
   console.log(`[worker:${jobId}] Brand: ${brandIdentity.visual_style}, primary: ${brandIdentity.brand_colors?.primary}`);
+  console.log(`[worker:${jobId}] Knowledge: ${productKnowledge.core_usps?.length || 0} USPs, ${productKnowledge.ad_angle_ideas?.length || 0} angles`);
 
   // ── Phase 3: Creative concept generation ────────────────────
   await updateJob(jobId, { status: 'concepts', phase: 'concepts' });
   console.log(`[worker:${jobId}] Generating ${count} creative concepts...`);
 
-  const concepts = await generateConceptsForBrand(product, brandIdentity, count);
+  const concepts = await generateConceptsForBrand(product, brandIdentity, count, productKnowledge);
   console.log(`[worker:${jobId}] Generated ${concepts.length} concepts`);
 
   // ── Phase 4: Image generation ────────────────────────────────

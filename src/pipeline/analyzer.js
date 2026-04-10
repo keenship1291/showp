@@ -17,10 +17,76 @@ export async function analyzeBrand(product) {
 }
 
 /**
+ * Deep product knowledge analysis — USPs, personas, psychology hooks.
+ * Mirrors the skill's analyze.js step. Run this before concept generation.
+ */
+export async function analyzeProductKnowledge(product) {
+  const productDataStr = JSON.stringify({
+    title: product.title,
+    vendor: product.vendor,
+    product_type: product.product_type,
+    price: product.price,
+    price_range: product.price_range,
+    tags: product.tags,
+    description: product.description.substring(0, 8000),
+    variants: product.variants,
+    store_domain: product.store_domain,
+  }, null, 2).substring(0, 12000);
+
+  const prompt = `You are an expert direct-response advertising strategist and consumer psychologist. Analyze this Shopify product and generate deep, actionable marketing intelligence.
+
+PRODUCT DATA:
+${productDataStr}
+
+Return ONLY valid JSON (no markdown):
+{
+  "product_summary": {
+    "name": "...",
+    "price": "...",
+    "category": "...",
+    "one_liner": "One sentence describing what this product does"
+  },
+  "core_usps": ["USP 1", "USP 2", "USP 3", "USP 4", "USP 5"],
+  "target_personas": [
+    {
+      "id": "persona_1",
+      "name": "Persona name",
+      "age_range": "25-35",
+      "motivations": ["motivation 1", "motivation 2"],
+      "pain_points": ["pain 1", "pain 2"],
+      "language_style": "How they speak and what resonates"
+    },
+    { "id": "persona_2", "name": "...", "age_range": "...", "motivations": [], "pain_points": [], "language_style": "..." },
+    { "id": "persona_3", "name": "...", "age_range": "...", "motivations": [], "pain_points": [], "language_style": "..." }
+  ],
+  "psychology_hooks": {
+    "scarcity": ["hook 1", "hook 2"],
+    "fomo": ["hook 1", "hook 2"],
+    "identity": ["hook 1", "hook 2"],
+    "social_proof": ["hook 1", "hook 2"],
+    "authority": ["hook 1", "hook 2"]
+  },
+  "emotional_triggers": ["trigger 1", "trigger 2", "trigger 3", "trigger 4", "trigger 5"],
+  "power_words": ["word 1", "word 2", "word 3", "word 4", "word 5", "word 6", "word 7", "word 8"],
+  "ad_angle_ideas": [
+    { "angle_type": "benefit", "angle_subtype": "problem_solution", "title": "...", "hook": "Opening hook line", "target_persona": "persona_1" },
+    { "angle_type": "emotional", "angle_subtype": "aspiration", "title": "...", "hook": "...", "target_persona": "persona_2" },
+    { "angle_type": "social_proof", "angle_subtype": "testimonial", "title": "...", "hook": "...", "target_persona": "persona_1" },
+    { "angle_type": "urgency", "angle_subtype": "scarcity", "title": "...", "hook": "...", "target_persona": "persona_3" },
+    { "angle_type": "storytelling", "angle_subtype": "transformation", "title": "...", "hook": "...", "target_persona": "persona_2" }
+  ]
+}
+Generate AT LEAST 20 ad_angle_ideas (4 per angle_type). Return ONLY valid JSON.`;
+
+  const text = await callLLM(prompt, 4000);
+  return parseJSON(text, 'product knowledge');
+}
+
+/**
  * Generate N ad creative concepts using the brand identity.
  * Batches in groups of 10 to stay within Claude's output token limits.
  */
-export async function generateConceptsForBrand(product, brandIdentity, count) {
+export async function generateConceptsForBrand(product, brandIdentity, count, productKnowledge = null) {
   const angleAssignments = buildAngleAssignments(count);
   const batches = chunkArray(angleAssignments, 10);
   const allConcepts = [];
@@ -28,7 +94,7 @@ export async function generateConceptsForBrand(product, brandIdentity, count) {
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
     const startIdx = i * 10;
-    const batchConcepts = await generateConceptBatch(product, brandIdentity, batch, startIdx);
+    const batchConcepts = await generateConceptBatch(product, brandIdentity, batch, startIdx, productKnowledge);
     allConcepts.push(...batchConcepts);
   }
 
@@ -128,19 +194,19 @@ function buildAngleAssignments(count) {
   }));
 }
 
-async function generateConceptBatch(product, brand, assignments, startIdx) {
+async function generateConceptBatch(product, brand, assignments, startIdx, productKnowledge = null) {
   const batchSize = assignments.length;
   const anglesStr = assignments
     .map(a => `${a.index}. angle_type: ${a.angle_type} | creative_type: ${a.creative_type}`)
     .join('\n');
 
-  const prompt = buildConceptsPrompt(product, brand, batchSize, anglesStr, startIdx);
+  const prompt = buildConceptsPrompt(product, brand, batchSize, anglesStr, startIdx, productKnowledge);
   const text = await callLLM(prompt, 8000);
   const concepts = parseJSON(text, `concept batch (${startIdx + 1}-${startIdx + batchSize})`);
   return Array.isArray(concepts) ? concepts : [];
 }
 
-function buildConceptsPrompt(product, brand, count, anglesStr, startIdx) {
+function buildConceptsPrompt(product, brand, count, anglesStr, startIdx, productKnowledge = null) {
   const b = brand;
   const productStr = JSON.stringify({
     title: product.title,
@@ -153,10 +219,23 @@ function buildConceptsPrompt(product, brand, count, anglesStr, startIdx) {
     store_domain: product.store_domain,
   }, null, 2);
 
+  const knowledgeStr = productKnowledge ? `
+DEEP PRODUCT INTELLIGENCE (use this to write better hooks, copy, and prompts):
+USPs: ${(productKnowledge.core_usps || []).join(' | ')}
+Power Words: ${(productKnowledge.power_words || []).join(', ')}
+Emotional Triggers: ${(productKnowledge.emotional_triggers || []).join(', ')}
+Personas: ${(productKnowledge.target_personas || []).map(p => `${p.name} (${p.age_range}): ${p.language_style}`).join(' | ')}
+Psychology Hooks — Scarcity: ${(productKnowledge.psychology_hooks?.scarcity || []).join(', ')}
+Psychology Hooks — FOMO: ${(productKnowledge.psychology_hooks?.fomo || []).join(', ')}
+Psychology Hooks — Identity: ${(productKnowledge.psychology_hooks?.identity || []).join(', ')}
+Suggested Ad Angles: ${(productKnowledge.ad_angle_ideas || []).slice(0, 10).map(a => `[${a.angle_type}] ${a.hook}`).join(' | ')}
+` : '';
+
   return `You are a world-class Meta/Instagram ad creative director specializing in high-converting DTC brand ads.
 
 PRODUCT:
 ${productStr}
+${knowledgeStr}
 
 BRAND IDENTITY (use these EXACTLY in every image prompt — do not deviate):
 Visual Style: ${b.visual_style}
