@@ -184,18 +184,16 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await axios.post(
-        `${config.openrouterBaseUrl}/chat/completions`,
+        `${config.llmBaseUrl}/chat/completions`,
         {
-          model: config.openrouterModel,
+          model: config.llmModel,
           max_tokens: maxTokens,
           messages: [{ role: 'user', content: prompt }],
         },
         {
           headers: {
-            Authorization: `Bearer ${config.openrouterApiKey}`,
+            Authorization: `Bearer ${config.kieAiApiKey}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://github.com/keenship1291/showp',
-            'X-Title': 'Ad Creative Generator',
           },
           timeout: timeoutMs,
         },
