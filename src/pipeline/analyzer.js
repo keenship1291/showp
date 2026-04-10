@@ -180,26 +180,35 @@ ${anglesStr}
 IMAGE PROMPT REQUIREMENTS — most critical part:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+⚠️ PRODUCT FIDELITY RULE — applies to BOTH types:
+The image generation model will receive the actual product photo as a reference image.
+The generated image MUST show the product looking IDENTICAL to that reference photo.
+Same packaging design, same label artwork, same colors, same logo, same text on packaging.
+NEVER invent, simplify, or reimagine the product. It must be photo-accurate.
+Start every image prompt with: "Using the provided reference image as the exact product — reproduce the product with 100% accuracy, preserving all packaging details, label design, colors, logo, and text exactly as shown."
+
 FOR "product_shot" creative_type — write 180-220 words:
 A hyperrealistic commercial product photography brief. MUST include all of:
-1. SUBJECT: Use the exact product_hero_description above verbatim, then add relevant prop context
-2. LIGHTING: Be ultra-specific (e.g., "large 120cm octabox at 45° camera-left, silver V-flat fill at 1:3 ratio, hair light from above-right")
-3. BACKGROUND: Use brand background color ${b.brand_colors?.background || '#FFFFFF'} or a lifestyle context matching ${b.visual_style} — specify texture/material
-4. COMPOSITION: Specific framing (e.g., "product off-center right at rule-of-thirds intersection, 15° tilt, 30% negative space left")
-5. COLOR GRADING: Match ${b.dominant_color_mood} palette exactly
-6. SURFACE/PROPS: What the product sits on, any accent props (matching brand aesthetic, never distracting)
-7. FINAL LINE: "Photorealistic commercial photography, Phase One IQ4 150MP camera, 80mm macro lens, f/8, ISO 100, zero digital artifacts."
+1. FIDELITY LINE: Start with the fidelity rule above verbatim.
+2. SUBJECT: Describe product count/arrangement (e.g., "single can", "three cans grouped") matching ${b.product_hero_description}
+3. LIGHTING: Be ultra-specific (e.g., "large 120cm octabox at 45° camera-left, silver V-flat fill at 1:3 ratio, hair light from above-right")
+4. BACKGROUND: Use brand background color ${b.brand_colors?.background || '#FFFFFF'} — specify texture/material (e.g., "seamless white paper sweep", "soft warm concrete")
+5. COMPOSITION: Specific framing (e.g., "product off-center right at rule-of-thirds, 15° tilt, 30% negative space left for text overlay")
+6. COLOR GRADING: Match ${b.dominant_color_mood} palette — "no color grading that alters product colors"
+7. SURFACE/PROPS: What the product sits on, minimal accent props matching brand — "props must never obscure product label"
+8. FINAL LINE: "Photorealistic commercial photography, Phase One IQ4 150MP, 80mm macro, f/8, ISO 100. Zero digital artifacts. Product label must be sharp and fully legible."
 
 FOR "ad_graphic" creative_type — write 230-270 words:
-A complete designed ad layout brief for an AI image model. MUST include all of:
-1. CANVAS: "Square 1:1 ad canvas."
-2. BACKGROUND: Exact hex code ${b.recommended_ad_backgrounds?.[0] || b.brand_colors?.primary || '#FFFFFF'} with gradient or texture description
-3. PRODUCT PLACEMENT: Size (e.g., "55% of canvas height"), position (e.g., "centered, slightly right of center"), treatment (drop shadow: "soft 20px blur, 30% opacity, offset 8px down", or glow effect)
-4. HEADLINE TEXT: Exact ad headline text in quotes, typographic weight (e.g., "Extra-Bold 72pt"), font aesthetic (matching ${b.packaging_description}), color ${b.brand_colors?.text || '#000000'}, position (e.g., "top third, centered, 12% margin sides")
-5. SUBHEADLINE/COPY: Exact supporting text, size relative to headline, color, position
-6. CTA BUTTON: Exact CTA text, button background ${b.brand_colors?.accent || b.brand_colors?.primary || '#000000'}, text color, corner radius, size, position ("bottom center, 16px from edge")
-7. BRAND ELEMENT: Small logo/brand name placement (top-left, 8% canvas width)
-8. OVERALL: "Clean premium ${b.visual_style} DTC ad aesthetic. No clutter. Professional print-ready quality."
+A complete designed ad layout. MUST include all of:
+1. FIDELITY LINE: Start with the fidelity rule above verbatim.
+2. CANVAS: "Square 1:1 ad canvas, ${b.recommended_ad_backgrounds?.[0] || b.brand_colors?.background || '#FFFFFF'} background."
+3. BACKGROUND: Describe gradient, texture, or pattern using brand colors — must not clash with product
+4. PRODUCT PLACEMENT: The EXACT product from reference image, size (e.g., "60% of canvas height"), centered or slightly offset, with soft drop shadow ("12px blur, 20% opacity, 6px down") — product label fully visible and legible
+5. HEADLINE TEXT: Exact headline in quotes, font weight (e.g., "Black 68pt sans-serif"), color ${b.brand_colors?.text || '#1A1A1A'}, position (e.g., "upper third, left-aligned, 10% margin")
+6. SUBHEADLINE: Exact supporting copy, 60% headline size, same color family, positioned below headline
+7. CTA BUTTON: Exact CTA text in quotes, pill-shaped button, background ${b.brand_colors?.accent || b.brand_colors?.primary || '#000000'}, white text, bottom-center, 48px height
+8. BRAND MARK: Brand name or logo top-left corner, 8% canvas width
+9. OVERALL: "Clean ${b.visual_style} DTC ad. Product is the hero. No clutter. All text legible at mobile size."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

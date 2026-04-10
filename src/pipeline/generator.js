@@ -171,9 +171,9 @@ async function downloadAndSave(imageUrl, jobDir, conceptId) {
 
 function getTopProductImages(productData) {
   return productData.images
-    .filter(img => img.src && img.width >= 600)
+    .filter(img => img.src && img.width >= 400)
     .sort((a, b) => (b.width * b.height) - (a.width * a.height))
-    .slice(0, 3)
+    .slice(0, 5)
     .map(img => img.src);
 }
 
