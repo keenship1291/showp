@@ -40,5 +40,5 @@ export const config = {
   imageBaseUrl: required('IMAGE_BASE_URL'),
 
   // Job TTL in Redis (default 24h)
-  jobTtlSeconds: parseInt(optional('JOB_TTL_SECONDS', String(24 * 60 * 60)), 10),
+  jobTtlSeconds: parseInt(optional('JOB_TTL_SECONDS', String(30 * 60)), 10),
 };
