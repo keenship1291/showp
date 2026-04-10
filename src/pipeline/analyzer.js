@@ -178,29 +178,53 @@ Headlines must be under 40 characters. CTA under 20 characters.`;
 
 // ── Utilities ──────────────────────────────────────────────────
 
-async function callLLM(prompt, maxTokens = 4096) {
+async function callLLM(prompt, maxTokens = 4096, retries = 4) {
   const timeoutMs = maxTokens >= 6000 ? 150000 : 90000;
-  const res = await axios.post(
-    `${config.openrouterBaseUrl}/chat/completions`,
-    {
-      model: config.openrouterModel,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${config.openrouterApiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/keenship1291/showp',
-        'X-Title': 'Ad Creative Generator',
-      },
-      timeout: timeoutMs,
-    },
-  );
 
-  const text = res.data?.choices?.[0]?.message?.content || '';
-  if (!text) throw new Error('OpenRouter returned empty response');
-  return text;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await axios.post(
+        `${config.openrouterBaseUrl}/chat/completions`,
+        {
+          model: config.openrouterModel,
+          max_tokens: maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${config.openrouterApiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://github.com/keenship1291/showp',
+            'X-Title': 'Ad Creative Generator',
+          },
+          timeout: timeoutMs,
+        },
+      );
+
+      const text = res.data?.choices?.[0]?.message?.content || '';
+      if (!text) throw new Error('OpenRouter returned empty response');
+      return text;
+
+    } catch (err) {
+      const status = err.response?.status;
+      const isRateLimit = status === 429;
+      const isServerError = status >= 500;
+
+      if ((isRateLimit || isServerError) && attempt < retries) {
+        // Exponential backoff: 5s, 10s, 20s, 40s
+        const waitMs = 5000 * Math.pow(2, attempt);
+        console.warn(`[analyzer] OpenRouter ${status} — retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${retries})`);
+        await sleep(waitMs);
+        continue;
+      }
+
+      throw err;
+    }
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function chunkArray(arr, size) {
