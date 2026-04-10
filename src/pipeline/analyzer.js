@@ -9,6 +9,10 @@ const ANGLE_TYPES = ['benefit', 'emotional', 'social_proof', 'urgency', 'storyte
  * Analyze product to extract brand identity using OpenRouter (text-only).
  */
 export async function analyzeBrand(product) {
+  const imageUrls = (product.top_image_urls || []).slice(0, 3).filter(Boolean);
+  if (imageUrls.length > 0) {
+    return analyzeBrandWithImages(product, imageUrls);
+  }
   return analyzeBrandTextOnly(product);
 }
 
@@ -40,6 +44,47 @@ export async function generateConceptsForBrand(product, brandIdentity, count) {
 async function analyzeBrandTextOnly(product) {
   const text = await callLLM(buildBrandTextPrompt(product), 1200);
   return parseJSON(text, 'brand analysis');
+}
+
+async function analyzeBrandWithImages(product, imageUrls) {
+  const content = [
+    { type: 'text', text: buildBrandVisionPrompt(product) },
+    ...imageUrls.map(url => ({ type: 'image_url', image_url: { url } })),
+  ];
+  const text = await callLLM(content, 1200);
+  return parseJSON(text, 'brand analysis');
+}
+
+function buildBrandVisionPrompt(product) {
+  return `You are a brand identity specialist. Analyze the product images provided AND the product details below to extract an accurate visual brand identity.
+
+Product: "${product.title}"
+Vendor: ${product.vendor || 'unknown'}
+Category: ${product.product_type || 'general'}
+Price: ${product.price}
+Tags: ${product.tags.slice(0, 10).join(', ') || 'none'}
+Description: ${product.description.substring(0, 400)}
+
+Look at the actual product images to extract real brand colors, packaging style, and visual aesthetic. Be precise — extract exact hex codes from what you see.
+
+Return ONLY valid JSON (no markdown):
+{
+  "brand_colors": {
+    "primary": "#HEXCODE",
+    "secondary": "#HEXCODE",
+    "accent": "#HEXCODE",
+    "background": "#FFFFFF",
+    "text": "#1A1A1A"
+  },
+  "visual_style": "one of: luxury-minimalist | bold-energetic | warm-organic | clinical-clean | playful-vibrant | rustic-natural | modern-tech | elegant-premium",
+  "aesthetic_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "product_hero_description": "Describe exactly how the product looks based on the images. 2-3 sentences.",
+  "packaging_description": "Describe the actual packaging style visible in the images.",
+  "photography_style": "Describe the photography style used in the product images.",
+  "brand_personality": "4 personality adjectives derived from the visual identity",
+  "dominant_color_mood": "color mood based on the actual colors seen in the images",
+  "recommended_ad_backgrounds": ["#HEXCODE", "#HEXCODE", "#HEXCODE"]
+}`;
 }
 
 
@@ -178,8 +223,12 @@ Headlines must be under 40 characters. CTA under 20 characters.`;
 
 // ── Utilities ──────────────────────────────────────────────────
 
-async function callLLM(prompt, maxTokens = 4096, retries = 4) {
+async function callLLM(promptOrContent, maxTokens = 4096, retries = 4) {
   const timeoutMs = maxTokens >= 6000 ? 150000 : 90000;
+  // Accept either a plain string or a structured content array (for vision)
+  const content = Array.isArray(promptOrContent)
+    ? promptOrContent
+    : promptOrContent;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -188,7 +237,7 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
         {
           model: 'claude-sonnet-4-6',
           stream: false,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content }],
         },
         {
           headers: {
