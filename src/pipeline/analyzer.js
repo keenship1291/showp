@@ -199,8 +199,20 @@ async function callLLM(prompt, maxTokens = 4096, retries = 4) {
         },
       );
 
-      const text = res.data?.choices?.[0]?.message?.content || '';
-      if (!text) throw new Error('OpenRouter returned empty response');
+      // Log full response on first attempt so we can debug structure issues
+      if (attempt === 0) {
+        console.log('[analyzer] Kie.ai LLM response:', JSON.stringify(res.data).substring(0, 500));
+      }
+
+      const text = res.data?.choices?.[0]?.message?.content
+        || res.data?.choices?.[0]?.text
+        || res.data?.content
+        || res.data?.text
+        || res.data?.output
+        || res.data?.result
+        || '';
+
+      if (!text) throw new Error(`Kie.ai LLM returned empty response. Raw: ${JSON.stringify(res.data).substring(0, 300)}`);
       return text;
 
     } catch (err) {
