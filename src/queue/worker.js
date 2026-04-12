@@ -1,10 +1,8 @@
-import fs from 'fs/promises';
-import path from 'path';
 import { Worker } from 'bullmq';
 import { createBullConnection } from '../storage/redis.js';
 import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
 import { analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
-import { generateImages, uploadBase64ToKie } from '../pipeline/generator.js';
+import { generateImages } from '../pipeline/generator.js';
 import { updateJob, appendImage } from '../storage/jobStore.js';
 import { config } from '../config.js';
 
@@ -38,7 +36,7 @@ export async function startWorker() {
 async function processJob(job) {
   const {
     jobId, url, count, aspectRatio, resolution,
-    pageProductData, userSelectedImageUrl, userImageBase64, userImageMimeType,
+    pageProductData, userSelectedImageUrl,
   } = job.data;
 
   // ── Phase 1: Get product data ────────────────────────────────
@@ -52,7 +50,7 @@ async function processJob(job) {
     console.log(`[worker:${jobId}] Using page data: "${product.title}" (${product.images.length} images)`);
 
     // Enrich images from Shopify API when user hasn't provided their own image
-    if (!userSelectedImageUrl && !userImageBase64) {
+    if (!userSelectedImageUrl) {
       try {
         const apiProduct = await scrapeShopifyProduct(url);
         if (apiProduct.top_image_urls?.length > 0) {
@@ -71,33 +69,13 @@ async function processJob(job) {
   }
 
   // ── User image override (replaces auto-selected images) ──────
+  // By the time we get here, userSelectedImageUrl is already a Kie CDN URL
+  // (the route handler resolved base64 uploads before enqueueing).
   if (userSelectedImageUrl) {
     product.top_image_urls = [userSelectedImageUrl];
     product.images = [{ src: userSelectedImageUrl, width: 0, height: 0, alt: '' }];
     product.image_count = 1;
-    console.log(`[worker:${jobId}] User-selected image: ${userSelectedImageUrl}`);
-  } else if (userImageBase64) {
-    const mimeType = userImageMimeType || 'image/jpeg';
-    const ext = mimeType.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
-    const base64DataUrl = `data:${mimeType};base64,${userImageBase64}`;
-    const kieUrl = await uploadBase64ToKie(base64DataUrl, `input-${jobId}.${ext}`);
-    if (kieUrl) {
-      product.top_image_urls = [kieUrl];
-      product.images = [{ src: kieUrl, width: 0, height: 0, alt: '' }];
-      product.image_count = 1;
-      console.log(`[worker:${jobId}] User-uploaded image hosted on Kie CDN: ${kieUrl}`);
-    } else {
-      // Fallback: save locally and use self-hosted URL
-      const jobDir = path.join(config.imagesDir, jobId);
-      await fs.mkdir(jobDir, { recursive: true });
-      const inputPath = path.join(jobDir, `input.${ext}`);
-      await fs.writeFile(inputPath, Buffer.from(userImageBase64, 'base64'));
-      const inputPublicUrl = `${config.imageBaseUrl}/images/${jobId}/input.${ext}`;
-      product.top_image_urls = [inputPublicUrl];
-      product.images = [{ src: inputPublicUrl, width: 0, height: 0, alt: '' }];
-      product.image_count = 1;
-      console.log(`[worker:${jobId}] User-uploaded image saved locally (Kie upload failed): ${inputPublicUrl}`);
-    }
+    console.log(`[worker:${jobId}] Using user image: ${userSelectedImageUrl}`);
   }
 
   // ── Phase 2: Product knowledge analysis ─────────────────────

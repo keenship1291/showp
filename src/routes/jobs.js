@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { validateApiKey } from '../middleware/auth.js';
 import { enqueueJob } from '../queue/jobQueue.js';
 import { createJob, getJob } from '../storage/jobStore.js';
+import { uploadBase64ToKie } from '../pipeline/generator.js';
 
 const router = Router();
 
@@ -29,6 +30,23 @@ router.post('/', validateApiKey, async (req, res) => {
 
   const jobId = nanoid(16);
 
+  // If user uploaded a base64 image, upload it to Kie CDN right now — before
+  // the job enters the queue. This keeps the massive base64 string out of
+  // Redis/BullMQ and means only a small CDN URL travels through the pipeline.
+  let resolvedImageUrl = userSelectedImageUrl || null;
+  if (!resolvedImageUrl && userImageBase64) {
+    const mimeType = userImageMimeType || 'image/jpeg';
+    const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
+    const base64DataUrl = `data:${mimeType};base64,${userImageBase64}`;
+    console.log(`[jobs] Uploading user image to Kie CDN for job ${jobId}...`);
+    resolvedImageUrl = await uploadBase64ToKie(base64DataUrl, `input-${jobId}.${ext}`);
+    if (resolvedImageUrl) {
+      console.log(`[jobs] User image uploaded to Kie CDN: ${resolvedImageUrl}`);
+    } else {
+      console.warn(`[jobs] Kie CDN upload failed for job ${jobId} — will proceed without user image`);
+    }
+  }
+
   await createJob(jobId, {
     url,
     count: safeCount,
@@ -43,9 +61,8 @@ router.post('/', validateApiKey, async (req, res) => {
     aspectRatio: safeAspectRatio,
     resolution: safeResolution,
     pageProductData: pageProductData || null,
-    userSelectedImageUrl: userSelectedImageUrl || null,
-    userImageBase64: userImageBase64 || null,
-    userImageMimeType: userImageMimeType || null,
+    // Only pass the resolved CDN URL — never put base64 in the queue
+    userSelectedImageUrl: resolvedImageUrl,
   });
 
   console.log(`[jobs] Created job ${jobId}: ${url} (count: ${safeCount})`);
