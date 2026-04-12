@@ -7,7 +7,7 @@ import { startWorker } from './queue/worker.js';
 const app = express();
 
 // ── Middleware ─────────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 // CORS — allow Chrome extension to reach this server
 app.use((req, res, next) => {

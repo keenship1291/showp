@@ -13,7 +13,7 @@ const MAX_COUNT = 50;
 // ── POST /api/jobs ─────────────────────────────────────────────
 // Start a new ad creative generation job.
 router.post('/', validateApiKey, async (req, res) => {
-  const { url, count, aspectRatio, resolution, pageProductData } = req.body;
+  const { url, count, aspectRatio, resolution, pageProductData, userSelectedImageUrl, userImageBase64, userImageMimeType } = req.body;
 
   if (!url || typeof url !== 'string' || !url.startsWith('http')) {
     return res.status(400).json({ error: 'url must be a valid HTTP/HTTPS URL' });
@@ -42,7 +42,10 @@ router.post('/', validateApiKey, async (req, res) => {
     count: safeCount,
     aspectRatio: safeAspectRatio,
     resolution: safeResolution,
-    pageProductData: pageProductData || null, // Browser-extracted product data — skips VPS scraping
+    pageProductData: pageProductData || null,
+    userSelectedImageUrl: userSelectedImageUrl || null,
+    userImageBase64: userImageBase64 || null,
+    userImageMimeType: userImageMimeType || null,
   });
 
   console.log(`[jobs] Created job ${jobId}: ${url} (count: ${safeCount})`);
