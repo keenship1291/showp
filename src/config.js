@@ -22,7 +22,7 @@ export const config = {
 
   // LLM — OpenRouter with Gemma 4 (free) for product analysis and concept generation
   llmBaseUrl: optional('LLM_BASE_URL', 'https://openrouter.ai/api/v1'),
-  llmModel: optional('LLM_MODEL', 'google/gemma-4-26b-a4b-it:free'),
+  llmModel: optional('LLM_MODEL', 'google/gemma-4-26b-a4b-it'),
   openRouterApiKey: required('OPENROUTER_API_KEY'),
 
   // Kie.ai — Banana image generation
