@@ -79,79 +79,6 @@ async function generateOneImage(concept, jobId, jobDir, aspectRatio, resolution,
   };
 }
 
-// ── Kie.ai File Upload API ──────────────────────────────────────
-
-/**
- * Pre-upload a remote URL to Kie's CDN so Kie.ai can reliably fetch it as a reference image.
- * Returns the kieai.redpandaai.co fileUrl, or null on failure (non-fatal).
- */
-async function uploadUrlToKie(fileUrl) {
-  try {
-    const res = await axios.post(
-      `${config.kieAiUploadBaseUrl}/api/file-url-upload`,
-      { fileUrl, uploadPath: 'ad-creative-refs' },
-      {
-        headers: {
-          Authorization: `Bearer ${config.kieAiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000,
-      },
-    );
-    if (res.data?.code === 200 && res.data?.data?.fileUrl) {
-      return res.data.data.fileUrl;
-    }
-    console.warn(`[generator] Kie URL upload returned unexpected response: ${JSON.stringify(res.data)}`);
-    return null;
-  } catch (err) {
-    console.warn(`[generator] Kie URL upload failed for ${fileUrl}: ${err.message}`);
-    return null;
-  }
-}
-
-/**
- * Pre-upload a base64 image to Kie's CDN.
- * base64Data must be a full data URL: "data:image/jpeg;base64,..."
- * Returns the kieai.redpandaai.co fileUrl, or null on failure (non-fatal).
- */
-export async function uploadBase64ToKie(base64Data, fileName = 'input.jpg') {
-  try {
-    const res = await axios.post(
-      `${config.kieAiUploadBaseUrl}/api/file-base64-upload`,
-      { base64Data, uploadPath: 'ad-creative-refs', fileName },
-      {
-        headers: {
-          Authorization: `Bearer ${config.kieAiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000,
-      },
-    );
-    if (res.data?.code === 200 && res.data?.data?.fileUrl) {
-      return res.data.data.fileUrl;
-    }
-    console.warn(`[generator] Kie base64 upload returned unexpected response: ${JSON.stringify(res.data)}`);
-    return null;
-  } catch (err) {
-    console.warn(`[generator] Kie base64 upload failed: ${err.message}`);
-    return null;
-  }
-}
-
-/**
- * Pre-upload all reference image URLs to Kie's CDN and return the hosted URLs.
- * Falls back to original URLs for any that fail.
- */
-async function preUploadImagesToKie(imageUrls) {
-  const results = await Promise.all(
-    imageUrls.map(async url => {
-      const kieUrl = await uploadUrlToKie(url);
-      return kieUrl || url; // fall back to original if upload fails
-    }),
-  );
-  return results;
-}
-
 // ── Kie.ai API ─────────────────────────────────────────────────
 
 async function createKieTask(prompt, aspectRatio, resolution, imageUrls) {
@@ -162,10 +89,10 @@ async function createKieTask(prompt, aspectRatio, resolution, imageUrls) {
     output_format: 'jpg',
   };
 
-  // Pre-upload reference images to Kie's CDN so they're reliably accessible
+  // Pass reference images — user-uploaded images are served from the VPS static
+  // file server (IMAGE_BASE_URL/images/...) which Kie.ai can fetch directly.
   if (imageUrls.length > 0) {
-    const hostedUrls = await preUploadImagesToKie(imageUrls);
-    input.image_input = hostedUrls;
+    input.image_input = imageUrls;
   }
 
   const res = await axios.post(

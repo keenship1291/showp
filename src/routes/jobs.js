@@ -1,9 +1,11 @@
+import fs from 'fs/promises';
+import path from 'path';
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { validateApiKey } from '../middleware/auth.js';
 import { enqueueJob } from '../queue/jobQueue.js';
 import { createJob, getJob } from '../storage/jobStore.js';
-import { uploadBase64ToKie } from '../pipeline/generator.js';
+import { config } from '../config.js';
 
 const router = Router();
 
@@ -30,20 +32,23 @@ router.post('/', validateApiKey, async (req, res) => {
 
   const jobId = nanoid(16);
 
-  // If user uploaded a base64 image, upload it to Kie CDN right now — before
-  // the job enters the queue. This keeps the massive base64 string out of
-  // Redis/BullMQ and means only a small CDN URL travels through the pipeline.
+  // If user uploaded a base64 image, save it to the VPS filesystem immediately
+  // and pass the resulting public URL into the queue.
+  // This keeps base64 out of Redis/BullMQ and gives Kie.ai a stable public URL to fetch.
   let resolvedImageUrl = userSelectedImageUrl || null;
   if (!resolvedImageUrl && userImageBase64) {
-    const mimeType = userImageMimeType || 'image/jpeg';
-    const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
-    const base64DataUrl = `data:${mimeType};base64,${userImageBase64}`;
-    console.log(`[jobs] Uploading user image to Kie CDN for job ${jobId}...`);
-    resolvedImageUrl = await uploadBase64ToKie(base64DataUrl, `input-${jobId}.${ext}`);
-    if (resolvedImageUrl) {
-      console.log(`[jobs] User image uploaded to Kie CDN: ${resolvedImageUrl}`);
-    } else {
-      console.warn(`[jobs] Kie CDN upload failed for job ${jobId} — will proceed without user image`);
+    try {
+      const mimeType = userImageMimeType || 'image/jpeg';
+      const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
+      const jobDir = path.join(config.imagesDir, jobId);
+      await fs.mkdir(jobDir, { recursive: true });
+      const filePath = path.join(jobDir, `input.${ext}`);
+      await fs.writeFile(filePath, Buffer.from(userImageBase64, 'base64'));
+      resolvedImageUrl = `${config.imageBaseUrl}/images/${jobId}/input.${ext}`;
+      console.log(`[jobs] User image saved → ${resolvedImageUrl}`);
+    } catch (err) {
+      console.error(`[jobs] Failed to save user image for job ${jobId}: ${err.message}`);
+      // Proceed without the image rather than blocking the job
     }
   }
 
@@ -61,11 +66,10 @@ router.post('/', validateApiKey, async (req, res) => {
     aspectRatio: safeAspectRatio,
     resolution: safeResolution,
     pageProductData: pageProductData || null,
-    // Only pass the resolved CDN URL — never put base64 in the queue
     userSelectedImageUrl: resolvedImageUrl,
   });
 
-  console.log(`[jobs] Created job ${jobId}: ${url} (count: ${safeCount})`);
+  console.log(`[jobs] Created job ${jobId}: ${url} (count: ${safeCount}, userImage: ${resolvedImageUrl ? 'yes' : 'no'})`);
   return res.status(201).json({ jobId, status: 'pending' });
 });
 
