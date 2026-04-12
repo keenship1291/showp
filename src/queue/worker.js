@@ -3,6 +3,7 @@ import { createBullConnection } from '../storage/redis.js';
 import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
 import { analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
 import { generateImages } from '../pipeline/generator.js';
+import { generateResizedVersions } from '../pipeline/resizer.js';
 import { updateJob, appendImage } from '../storage/jobStore.js';
 import { config } from '../config.js';
 
@@ -34,6 +35,42 @@ export async function startWorker() {
 }
 
 async function processJob(job) {
+  // Route to the correct handler based on job type
+  if (job.data.type === 'resize') {
+    return processResizeJob(job);
+  }
+  return processPipelineJob(job);
+}
+
+// ── Resize job ─────────────────────────────────────────────────
+
+async function processResizeJob(job) {
+  const { jobId, imageUrl, formats, resolution } = job.data;
+
+  await updateJob(jobId, { status: 'analyzing', phase: 'analyzing' });
+  console.log(`[worker:${jobId}] Resize job: ${formats.join(',')} @ ${resolution}`);
+
+  await updateJob(jobId, { status: 'generating', phase: 'generating', total: formats.length, current: 0 });
+
+  await generateResizedVersions(imageUrl, formats, resolution, jobId, async ({ item, current, total }) => {
+    await appendImage(jobId, {
+      id: item.format.replace(':', 'x'),
+      url: item.publicUrl,
+      headline: item.label,
+      angle_type: item.format,
+      error: item.error || null,
+    });
+    await updateJob(jobId, { current, total });
+    console.log(`[worker:${jobId}] Format ${item.format} ready (${current}/${total})`);
+  });
+
+  await updateJob(jobId, { status: 'done', phase: 'done' });
+  console.log(`[worker:${jobId}] Resize complete`);
+}
+
+// ── Pipeline job ───────────────────────────────────────────────
+
+async function processPipelineJob(job) {
   const {
     jobId, url, count, aspectRatio, resolution,
     pageProductData, userSelectedImageUrl,
