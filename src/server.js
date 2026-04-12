@@ -1,3 +1,5 @@
+import fs from 'fs/promises';
+import path from 'path';
 import express from 'express';
 import { config } from './config.js';
 import { jobsRouter } from './routes/jobs.js';
@@ -37,6 +39,33 @@ app.use((err, _req, res, _next) => {
   console.error('[server error]', err.message);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
+
+// ── Image cleanup — delete job folders older than 24 hours ─────
+const IMAGE_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function cleanupOldImages() {
+  try {
+    const entries = await fs.readdir(config.imagesDir, { withFileTypes: true });
+    const now = Date.now();
+    let deleted = 0;
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirPath = path.join(config.imagesDir, entry.name);
+      const stat = await fs.stat(dirPath);
+      if (now - stat.mtimeMs > IMAGE_TTL_MS) {
+        await fs.rm(dirPath, { recursive: true, force: true });
+        deleted++;
+      }
+    }
+    if (deleted > 0) console.log(`[cleanup] Deleted ${deleted} image folder(s) older than 24h`);
+  } catch (err) {
+    console.error('[cleanup] Error during image cleanup:', err.message);
+  }
+}
+
+// Run once on boot, then every hour
+cleanupOldImages();
+setInterval(cleanupOldImages, 60 * 60 * 1000);
 
 // ── Boot ───────────────────────────────────────────────────────
 await startWorker();
