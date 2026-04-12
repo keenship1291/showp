@@ -1,16 +1,19 @@
+import fs from 'fs/promises';
+import path from 'path';
 import { Worker } from 'bullmq';
 import { createBullConnection } from '../storage/redis.js';
 import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
-import { analyzeBrand, analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
+import { analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
 import { generateImages } from '../pipeline/generator.js';
 import { updateJob, appendImage } from '../storage/jobStore.js';
+import { config } from '../config.js';
 
 export async function startWorker() {
   const connection = createBullConnection();
 
   const worker = new Worker('pipeline', processJob, {
     connection,
-    concurrency: 2, // Process up to 2 jobs simultaneously
+    concurrency: 2,
   });
 
   worker.on('completed', job => {
@@ -24,7 +27,7 @@ export async function startWorker() {
         status: 'failed',
         phase: 'failed',
         error: err.message,
-      }).catch(() => {}); // Non-fatal if Redis is unavailable
+      }).catch(() => {});
     }
   });
 
@@ -33,7 +36,10 @@ export async function startWorker() {
 }
 
 async function processJob(job) {
-  const { jobId, url, count, aspectRatio, resolution, pageProductData } = job.data;
+  const {
+    jobId, url, count, aspectRatio, resolution,
+    pageProductData, userSelectedImageUrl, userImageBase64, userImageMimeType,
+  } = job.data;
 
   // ── Phase 1: Get product data ────────────────────────────────
   await updateJob(jobId, { status: 'scraping', phase: 'scraping' });
@@ -43,39 +49,60 @@ async function processJob(job) {
   // Prefer browser-extracted data — no scraping, no blocks
   if (pageProductData && (pageProductData.title || pageProductData.name)) {
     product = normalizePageProductData(pageProductData, url);
-    if (product?.title) {
-      console.log(`[worker:${jobId}] Using page data: "${product.title}" (${product.images.length} images)`);
-    }
-  }
+    console.log(`[worker:${jobId}] Using page data: "${product.title}" (${product.images.length} images)`);
 
-  // Fall back to server-side scraping if page data was empty or missing
-  if (!product?.title) {
-    console.log(`[worker:${jobId}] Scraping: ${url}`);
+    // Enrich images from Shopify API when user hasn't provided their own image
+    if (!userSelectedImageUrl && !userImageBase64) {
+      try {
+        const apiProduct = await scrapeShopifyProduct(url);
+        if (apiProduct.top_image_urls?.length > 0) {
+          product.images = apiProduct.images;
+          product.top_image_urls = apiProduct.top_image_urls;
+          product.image_count = apiProduct.image_count;
+          console.log(`[worker:${jobId}] Image enrichment: ${product.top_image_urls.length} high-res images`);
+        }
+      } catch (e) {
+        console.log(`[worker:${jobId}] Image enrichment failed (using extension images): ${e.message}`);
+      }
+    }
+  } else {
     product = await scrapeShopifyProduct(url);
     console.log(`[worker:${jobId}] Scraped: "${product.title}" (${product.images.length} images)`);
   }
 
-  // ── Phase 2: Brand analysis + product knowledge ──────────────
-  await updateJob(jobId, {
-    status: 'analyzing',
-    phase: 'analyzing',
-    productTitle: product.title,
-  });
-  console.log(`[worker:${jobId}] Analyzing brand identity + product knowledge...`);
+  // ── User image override (replaces auto-selected images) ──────
+  if (userSelectedImageUrl) {
+    product.top_image_urls = [userSelectedImageUrl];
+    product.images = [{ src: userSelectedImageUrl, width: 0, height: 0, alt: '' }];
+    product.image_count = 1;
+    console.log(`[worker:${jobId}] User-selected image: ${userSelectedImageUrl}`);
+  } else if (userImageBase64) {
+    const jobDir = path.join(config.imagesDir, jobId);
+    await fs.mkdir(jobDir, { recursive: true });
+    const mimeType = userImageMimeType || 'image/jpeg';
+    const ext = mimeType.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
+    const inputPath = path.join(jobDir, `input.${ext}`);
+    await fs.writeFile(inputPath, Buffer.from(userImageBase64, 'base64'));
+    const inputPublicUrl = `${config.imageBaseUrl}/images/${jobId}/input.${ext}`;
+    product.top_image_urls = [inputPublicUrl];
+    product.images = [{ src: inputPublicUrl, width: 0, height: 0, alt: '' }];
+    product.image_count = 1;
+    console.log(`[worker:${jobId}] User-uploaded image saved: ${inputPublicUrl}`);
+  }
 
-  const [brandIdentity, productKnowledge] = await Promise.all([
-    analyzeBrand(product),
-    analyzeProductKnowledge(product),
-  ]);
-  console.log(`[worker:${jobId}] Brand: ${brandIdentity.visual_style}, primary: ${brandIdentity.brand_colors?.primary}`);
-  console.log(`[worker:${jobId}] Knowledge: ${productKnowledge.core_usps?.length || 0} USPs, ${productKnowledge.ad_angle_ideas?.length || 0} angles`);
+  // ── Phase 2: Product knowledge analysis ─────────────────────
+  await updateJob(jobId, { status: 'analyzing', phase: 'analyzing', productTitle: product.title });
+  console.log(`[worker:${jobId}] Analyzing product knowledge...`);
+
+  const knowledge = await analyzeProductKnowledge(product, count);
+  console.log(`[worker:${jobId}] Analysis: ${knowledge.core_usps?.length || 0} USPs, ${knowledge.ad_angle_ideas?.length || 0} angle ideas`);
 
   // ── Phase 3: Creative concept generation ────────────────────
   await updateJob(jobId, { status: 'concepts', phase: 'concepts' });
   console.log(`[worker:${jobId}] Generating ${count} creative concepts...`);
 
-  const concepts = await generateConceptsForBrand(product, brandIdentity, count, productKnowledge);
-  console.log(`[worker:${jobId}] Generated ${concepts.length} concepts`);
+  const concepts = await generateConceptsForBrand(product, knowledge, count, aspectRatio);
+  console.log(`[worker:${jobId}] Generated ${concepts.length} concepts (all ad_graphic)`);
 
   // ── Phase 4: Image generation ────────────────────────────────
   await updateJob(jobId, {

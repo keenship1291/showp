@@ -170,11 +170,19 @@ async function downloadAndSave(imageUrl, jobDir, conceptId) {
 // ── Utilities ──────────────────────────────────────────────────
 
 function getTopProductImages(productData) {
-  return productData.images
-    .filter(img => img.src && img.width >= 400)
-    .sort((a, b) => (b.width * b.height) - (a.width * a.height))
-    .slice(0, 5)
-    .map(img => img.src);
+  // Prefer pre-computed top_image_urls — scraper already handles width=0 images correctly there
+  const urls = productData.top_image_urls?.length
+    ? productData.top_image_urls.slice(0, 5)
+    : (productData.images || [])
+        .filter(img => img.src && (img.width >= 400 || img.width === 0))
+        .sort((a, b) => (b.width * b.height) - (a.width * a.height))
+        .slice(0, 5)
+        .map(img => img.src);
+
+  // Normalize protocol-relative URLs (//cdn.shopify.com/...) — Kie.ai needs full https:// URLs
+  return urls
+    .map(url => (url && url.startsWith('//') ? `https:${url}` : url))
+    .filter(Boolean);
 }
 
 function sleep(ms) {

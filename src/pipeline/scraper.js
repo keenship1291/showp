@@ -19,7 +19,7 @@ export function normalizePageProductData(raw, pageUrl) {
 
     // Minimal format built from DOM elements
     const images = (raw.images || []).map(img => ({
-      src: img.src || img,
+      src: toAbsoluteUrl(img.src || img || ''),
       width: img.width || 800,
       height: img.height || 800,
       alt: img.alt || '',
@@ -179,7 +179,7 @@ function normalizeFromJsonLd(raw, storeUrl) {
   const offers = Array.isArray(raw.offers) ? raw.offers[0] : raw.offers;
   const imgList = Array.isArray(raw.image) ? raw.image : (raw.image ? [raw.image] : []);
   const images = imgList.map(src => ({
-    src: typeof src === 'string' ? src : (src.url || src.contentUrl || ''),
+    src: toAbsoluteUrl(typeof src === 'string' ? src : (src.url || src.contentUrl || '')),
     width: 800,
     height: 800,
     alt: raw.name || '',
@@ -210,9 +210,14 @@ function normalizeFromJsonLd(raw, storeUrl) {
   };
 }
 
+function toAbsoluteUrl(src) {
+  if (!src) return '';
+  return src.startsWith('//') ? `https:${src}` : src;
+}
+
 function normalizeProduct(raw, storeUrl) {
   const images = (raw.images || []).map(img => ({
-    src: img.src || '',
+    src: toAbsoluteUrl(img.src || ''),
     width: img.width || 0,
     height: img.height || 0,
     alt: img.alt || '',

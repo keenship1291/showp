@@ -20,15 +20,19 @@ export const config = {
   // Redis
   redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
 
-  // Kie.ai Claude Haiku 4.5 — uses same API key as image generation
-  llmBaseUrl: optional('LLM_BASE_URL', 'https://api.kie.ai/claude/v1'),
+  // LLM — OpenRouter with Gemma 4 (free) for product analysis and concept generation
+  llmBaseUrl: optional('LLM_BASE_URL', 'https://openrouter.ai/api/v1'),
+  llmModel: optional('LLM_MODEL', 'google/gemma-4-26b-a4b-it:free'),
+  openRouterApiKey: required('OPENROUTER_API_KEY'),
 
   // Kie.ai — Banana image generation
   kieAiApiKey: required('KIE_AI_API_KEY'),
   kieAiBaseUrl: optional('KIE_AI_BASE_URL', 'https://api.kie.ai/api/v1'),
   kieAiModel: optional('KIE_AI_MODEL', 'nano-banana-2'),
+  // Kie.ai File Upload API — separate base URL for pre-uploading reference images
+  kieAiUploadBaseUrl: optional('KIE_AI_UPLOAD_BASE_URL', 'https://kieai.redpandaai.co'),
 
-  // Generation
+  // Generation tuning
   concurrentGenerations: parseInt(optional('CONCURRENT_GENERATIONS', '3'), 10),
   pollIntervalMs: parseInt(optional('POLL_INTERVAL_MS', '5000'), 10),
   pollTimeoutMs: parseInt(optional('POLL_TIMEOUT_MS', '300000'), 10),
@@ -39,6 +43,6 @@ export const config = {
   // Public URL of this server — used to build image URLs returned to the extension
   imageBaseUrl: required('IMAGE_BASE_URL'),
 
-  // Job TTL in Redis (default 24h)
+  // Job TTL in Redis (default 30 min)
   jobTtlSeconds: parseInt(optional('JOB_TTL_SECONDS', String(30 * 60)), 10),
 };
