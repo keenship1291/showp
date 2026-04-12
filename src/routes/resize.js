@@ -15,10 +15,10 @@ const VALID_RESOLUTIONS = new Set(['1K', '2K']);
 // ── POST /api/resize ───────────────────────────────────────────
 // Start a resize job: take one uploaded creative, output it in multiple formats.
 router.post('/', validateApiKey, async (req, res) => {
-  const { userImageBase64, userImageMimeType, formats, resolution } = req.body;
+  const { userImageBase64, userImageMimeType, userSelectedImageUrl, formats, resolution } = req.body;
 
-  if (!userImageBase64) {
-    return res.status(400).json({ error: 'userImageBase64 is required' });
+  if (!userImageBase64 && !userSelectedImageUrl) {
+    return res.status(400).json({ error: 'Either userImageBase64 or userSelectedImageUrl is required' });
   }
 
   const rawFormats = Array.isArray(formats) ? formats : (formats || '').split(',').map(f => f.trim());
@@ -30,20 +30,24 @@ router.post('/', validateApiKey, async (req, res) => {
   const safeResolution = VALID_RESOLUTIONS.has(resolution) ? resolution : '1K';
   const jobId = nanoid(16);
 
-  // Save uploaded image to VPS filesystem immediately
-  let imageUrl;
-  try {
-    const mimeType = userImageMimeType || 'image/jpeg';
-    const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
-    const jobDir = path.join(config.imagesDir, jobId);
-    await fs.mkdir(jobDir, { recursive: true });
-    const filePath = path.join(jobDir, `source.${ext}`);
-    await fs.writeFile(filePath, Buffer.from(userImageBase64, 'base64'));
-    imageUrl = `${config.imageBaseUrl}/images/${jobId}/source.${ext}`;
-    console.log(`[resize] Source image saved → ${imageUrl}`);
-  } catch (err) {
-    console.error(`[resize] Failed to save image: ${err.message}`);
-    return res.status(500).json({ error: 'Failed to save uploaded image' });
+  // Resolve the source image URL:
+  // - If user selected from the Shopify grid, use that URL directly
+  // - If user uploaded a file, save it to the VPS and use the public URL
+  let imageUrl = userSelectedImageUrl || null;
+  if (!imageUrl && userImageBase64) {
+    try {
+      const mimeType = userImageMimeType || 'image/jpeg';
+      const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
+      const jobDir = path.join(config.imagesDir, jobId);
+      await fs.mkdir(jobDir, { recursive: true });
+      const filePath = path.join(jobDir, `source.${ext}`);
+      await fs.writeFile(filePath, Buffer.from(userImageBase64, 'base64'));
+      imageUrl = `${config.imageBaseUrl}/images/${jobId}/source.${ext}`;
+      console.log(`[resize] Source image saved → ${imageUrl}`);
+    } catch (err) {
+      console.error(`[resize] Failed to save image: ${err.message}`);
+      return res.status(500).json({ error: 'Failed to save uploaded image' });
+    }
   }
 
   await createJob(jobId, { formats: safeFormats, resolution: safeResolution });
