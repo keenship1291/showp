@@ -252,9 +252,11 @@ ${anglesStr}
 
 IMAGE PROMPT RULES — this is the most important part:
 
+CRITICAL: The product is "${knowledge?.product_summary?.name || 'the product'}". You MUST refer to it by this exact name and product type in every image prompt. Never substitute a different product type (e.g. do NOT call a cup a bottle, do NOT call a mug a jar).
+
 Describe a COMPLETE designed ad graphic exactly as it should look on a ${canvasLabel} — as if briefing a designer. Always include:
 1. BACKGROUND: color, gradient, or texture (e.g. "warm cream linen background #F5F0E8")
-2. PRODUCT PLACEMENT: where the product image sits, angle, size, any shadow/glow
+2. PRODUCT PLACEMENT: where the ${knowledge?.product_summary?.name || 'product'} sits, angle, size, any shadow/glow. ALWAYS name the product correctly.
 3. HEADLINE TEXT: exact text, font style, color, position
 4. CTA ELEMENT: button or badge with exact text, colors, position
 5. OVERALL STYLE: e.g. "clean DTC brand aesthetic", "bold high-contrast performance"
