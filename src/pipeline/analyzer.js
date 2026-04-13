@@ -126,6 +126,11 @@ export async function analyzeProductKnowledge(product, count) {
 
   const prompt = `You are an expert direct-response advertising strategist and consumer psychologist. Analyze this Shopify product data and generate deep, actionable marketing intelligence.
 
+STRICT RULE — NO HALLUCINATION:
+Only extract facts, claims, and attributes that are explicitly stated or strongly implied by the product data above.
+Do NOT invent: customer counts, review numbers, certifications, partnerships, awards, causes (e.g. military support, charity donations), or any specific statistics unless they appear in the product data.
+If a field has no factual basis from the data, write a general truthful statement or leave it as an empty array — never fabricate.
+
 PRODUCT DATA:
 ${productDataStr}
 
@@ -326,11 +331,18 @@ async function generateConceptBatch(knowledge, count, startIdx, aspectRatio, out
 CAMPAIGN GOAL: ${outcomeCtx.label}
 ${outcomeCtx.directive}
 
+STRICT RULE — FACTS ONLY, NO HALLUCINATION:
+Every claim in headline, primary_text, image_text_overlay, and image_prompt MUST be grounded in the product knowledge provided.
+NEVER invent: specific review counts ("10,000+ reviews"), star ratings, customer testimonials, certifications, partnerships, causes (charity, military, etc.), awards, or statistics that are not present in the product knowledge.
+If writing a testimonial-style or social-proof angle and no real reviews exist in the data, write a believable but clearly general statement — do NOT fabricate a specific person, quote, or number.
+Treat unverified superlatives ("best", "#1", "proven") with caution — only use them if the product data supports it.
+
 PRODUCT KNOWLEDGE:
 ${knowledgeStr}
 
 Requirements:
 - The CAMPAIGN GOAL above is the north star — every concept (copy, image, tone, CTA) must serve it
+- All claims must be grounded in the product knowledge above — no invented facts
 - Follow these assigned angles exactly (in order):
 ${anglesStr}
 - Each concept must be unique with a different hook/angle
