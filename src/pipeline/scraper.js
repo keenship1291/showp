@@ -266,6 +266,37 @@ function normalizeProduct(raw, storeUrl) {
   };
 }
 
+/**
+ * Last-resort fallback: build a minimal product object purely from the URL.
+ * Used when the browser sent no data AND server-side scraping is blocked.
+ * The LLM will still produce reasonable output from the product name + domain.
+ */
+export function buildMinimalProductFromUrl(url) {
+  const handle = extractHandle(url) || 'product';
+  const domain = (() => { try { return new URL(url).hostname; } catch (_) { return ''; } })();
+  const title = handle
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase()); // "huel-bar" → "Huel Bar"
+
+  return {
+    title,
+    handle,
+    vendor: domain.replace(/^www\./, '').split('.')[0],
+    product_type: '',
+    tags: [],
+    store_url: (() => { try { return new URL(url).origin; } catch (_) { return ''; } })(),
+    store_domain: domain,
+    description: '',
+    price: 'N/A',
+    price_range: null,
+    variants: [],
+    images: [],
+    top_image_urls: [],
+    image_count: 0,
+    created_at: null,
+  };
+}
+
 function extractHandle(url) {
   try {
     const parts = new URL(url).pathname.split('/').filter(Boolean);

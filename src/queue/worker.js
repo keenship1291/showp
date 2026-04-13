@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import { createBullConnection } from '../storage/redis.js';
-import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
+import { scrapeShopifyProduct, normalizePageProductData, buildMinimalProductFromUrl } from '../pipeline/scraper.js';
 import { analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
 import { generateImages, generateModifiedImage } from '../pipeline/generator.js';
 import { generateResizedVersions } from '../pipeline/resizer.js';
@@ -103,28 +103,42 @@ async function processPipelineJob(job) {
 
   let product = null;
 
-  // Prefer browser-extracted data — no scraping, no blocks
-  if (pageProductData && (pageProductData.title || pageProductData.name)) {
-    product = normalizePageProductData(pageProductData, url);
-    console.log(`[worker:${jobId}] Using page data: "${product.title}" (${product.images.length} images)`);
+  // Path A: browser sent us data — always prefer this, no server-side block possible
+  if (pageProductData) {
+    const normalized = normalizePageProductData(pageProductData, url);
+    if (normalized) {
+      product = normalized;
+      console.log(`[worker:${jobId}] Using page data: "${product.title}" (${product.images.length} images)`);
 
-    // Enrich images from Shopify API when user hasn't provided their own image
-    if (!userSelectedImageUrl) {
-      try {
-        const apiProduct = await scrapeShopifyProduct(url);
-        if (apiProduct.top_image_urls?.length > 0) {
-          product.images = apiProduct.images;
-          product.top_image_urls = apiProduct.top_image_urls;
-          product.image_count = apiProduct.image_count;
-          console.log(`[worker:${jobId}] Image enrichment: ${product.top_image_urls.length} high-res images`);
+      // Best-effort image enrichment — failure is never fatal
+      if (!userSelectedImageUrl) {
+        try {
+          const apiProduct = await scrapeShopifyProduct(url);
+          if (apiProduct.top_image_urls?.length > 0) {
+            product.images        = apiProduct.images;
+            product.top_image_urls = apiProduct.top_image_urls;
+            product.image_count   = apiProduct.image_count;
+            console.log(`[worker:${jobId}] Image enrichment: ${product.top_image_urls.length} high-res images`);
+          }
+        } catch (e) {
+          console.log(`[worker:${jobId}] Image enrichment skipped (store blocks server requests): ${e.message}`);
         }
-      } catch (e) {
-        console.log(`[worker:${jobId}] Image enrichment failed (using extension images): ${e.message}`);
       }
     }
-  } else {
-    product = await scrapeShopifyProduct(url);
-    console.log(`[worker:${jobId}] Scraped: "${product.title}" (${product.images.length} images)`);
+  }
+
+  // Path B: no browser data or normalization failed — try server scrape
+  if (!product) {
+    try {
+      product = await scrapeShopifyProduct(url);
+      console.log(`[worker:${jobId}] Scraped: "${product.title}" (${product.images.length} images)`);
+    } catch (scrapeErr) {
+      console.warn(`[worker:${jobId}] Server scrape failed: ${scrapeErr.message}`);
+      // Path C: everything failed — build a minimal product from the URL so the
+      // pipeline can still run (LLM will do its best with the handle + domain).
+      product = buildMinimalProductFromUrl(url);
+      console.log(`[worker:${jobId}] Using minimal product fallback: "${product.title}"`);
+    }
   }
 
   // ── User image override (replaces auto-selected images) ──────
