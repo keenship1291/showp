@@ -33,7 +33,14 @@ export async function createJob(jobId, data) {
 export async function getJob(jobId) {
   const redis = getAppRedis();
   const raw = await redis.get(key(jobId));
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    console.error(`[jobStore] Corrupt JSON for job ${jobId} — removing`);
+    await redis.del(key(jobId)).catch(() => {});
+    return null;
+  }
 }
 
 /**
@@ -46,7 +53,8 @@ export async function updateJob(jobId, updates) {
   const raw = await redis.get(k);
   if (!raw) return;
 
-  const current = JSON.parse(raw);
+  let current;
+  try { current = JSON.parse(raw); } catch { return; }
   const updated = { ...current, ...updates, updatedAt: Date.now() };
   await redis.setex(k, config.jobTtlSeconds, JSON.stringify(updated));
 }
@@ -62,7 +70,8 @@ export async function appendImage(jobId, image) {
   const raw = await redis.get(k);
   if (!raw) return;
 
-  const current = JSON.parse(raw);
+  let current;
+  try { current = JSON.parse(raw); } catch { return; }
   current.images = [...(current.images || []), image];
   current.updatedAt = Date.now();
   await redis.setex(k, config.jobTtlSeconds, JSON.stringify(current));

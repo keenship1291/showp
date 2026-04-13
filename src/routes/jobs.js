@@ -10,8 +10,9 @@ import { config } from '../config.js';
 const router = Router();
 
 const VALID_ASPECT_RATIOS = new Set(['1:1', '4:5', '9:16', '16:9']);
-const VALID_RESOLUTIONS = new Set(['1K', '2K', '4K']);
-const MAX_COUNT = 50;
+const VALID_RESOLUTIONS   = new Set(['1K', '2K', '4K']);
+const MAX_COUNT           = 50;
+const MAX_BASE64_BYTES    = 10 * 1024 * 1024; // 10 MB decoded limit
 
 // ── POST /api/jobs ─────────────────────────────────────────────
 // Start a new ad creative generation job.
@@ -26,7 +27,11 @@ router.post('/', validateApiKey, async (req, res) => {
     return res.status(400).json({ error: 'url must be a Shopify product page (.../products/...)' });
   }
 
-  const safeCount = Math.min(Math.max(1, parseInt(count, 10) || 5), MAX_COUNT);
+  const parsedCount = parseInt(count, 10);
+  if (isNaN(parsedCount) || parsedCount < 1 || parsedCount > MAX_COUNT) {
+    return res.status(400).json({ error: `count must be between 1 and ${MAX_COUNT}` });
+  }
+  const safeCount = parsedCount;
   const safeAspectRatio = VALID_ASPECT_RATIOS.has(aspectRatio) ? aspectRatio : '1:1';
   const safeResolution = VALID_RESOLUTIONS.has(resolution) ? resolution : '1K';
 
@@ -37,9 +42,15 @@ router.post('/', validateApiKey, async (req, res) => {
   // This keeps base64 out of Redis/BullMQ and gives Kie.ai a stable public URL to fetch.
   let resolvedImageUrl = userSelectedImageUrl || null;
   if (!resolvedImageUrl && userImageBase64) {
+    // Reject oversized uploads before hitting the filesystem
+    const decodedBytes = Math.floor(userImageBase64.length * 0.75);
+    if (decodedBytes > MAX_BASE64_BYTES) {
+      return res.status(400).json({ error: 'Image too large. Maximum size is 10 MB.' });
+    }
     try {
+      const ALLOWED_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
       const mimeType = userImageMimeType || 'image/jpeg';
-      const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg') || 'jpg';
+      const ext = ALLOWED_MIME[mimeType] || 'jpg';
       const jobDir = path.join(config.imagesDir, jobId);
       await fs.mkdir(jobDir, { recursive: true });
       const filePath = path.join(jobDir, `input.${ext}`);

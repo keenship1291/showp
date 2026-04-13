@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import express from 'express';
+import helmet from 'helmet';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { jobsRouter } from './routes/jobs.js';
 import { resizeRouter } from './routes/resize.js';
@@ -9,10 +12,16 @@ import { startWorker } from './queue/worker.js';
 
 const app = express();
 
-// ── Middleware ─────────────────────────────────────────────────
-app.use(express.json({ limit: '20mb' }));
+// ── Security headers ───────────────────────────────────────────
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-// CORS — allow Chrome extension to reach this server
+// ── Compression ────────────────────────────────────────────────
+app.use(compression());
+
+// ── Body parsing ───────────────────────────────────────────────
+app.use(express.json({ limit: '15mb' }));
+
+// ── CORS — Chrome extensions use null origin, so wildcard is required ──
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -20,6 +29,26 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+// ── Rate limiting ──────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,       // 1 minute
+  max: 60,                    // 60 requests per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' },
+});
+
+const jobCreateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,                    // max 10 new jobs per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Job creation limit reached. Please wait before submitting more jobs.' },
+});
+
+app.use('/api', apiLimiter);
+app.use('/api/jobs', jobCreateLimiter);
 
 // ── Static image serving ───────────────────────────────────────
 app.use('/images', express.static(config.imagesDir, {
@@ -39,7 +68,11 @@ app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 // ── Error handler ──────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error('[server error]', err.message);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  // Never leak internal error details to clients in production
+  const isProd = config.nodeEnv === 'production';
+  res.status(err.status || 500).json({
+    error: isProd ? 'Internal server error' : (err.message || 'Internal server error'),
+  });
 });
 
 // ── Image cleanup — delete job folders older than 24 hours ─────

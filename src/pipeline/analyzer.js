@@ -1,7 +1,18 @@
 import axios from 'axios';
 import { config } from '../config.js';
 
-const ANGLE_TYPES = ['benefit', 'emotional', 'social_proof', 'urgency', 'storytelling'];
+const ANGLE_TYPES = [
+  'benefit',
+  'emotional',
+  'social_proof',
+  'urgency',
+  'storytelling',
+  'testimonial_ugc',
+  'review_card',
+  'stat_callout',
+  'comparison_table',
+  'us_vs_them',
+];
 
 const ASPECT_RATIO_LABELS = {
   '1:1':  'Square 1:1',
@@ -28,9 +39,9 @@ export async function analyzeProductKnowledge(product, count) {
     store_domain: product.store_domain,
   }, null, 2).substring(0, 15000);
 
-  // Distribute angles evenly across the 5 types — at least 1 per type, total = count
-  const angleCount = Math.max(count, 5);
-  const perType = Math.ceil(angleCount / 5);
+  // Distribute angles evenly across the 10 types — at least 1 per type, total = count
+  const angleCount = Math.max(count, 10);
+  const perType = Math.ceil(angleCount / 10);
 
   const prompt = `You are an expert direct-response advertising strategist and consumer psychologist. Analyze this Shopify product data and generate deep, actionable marketing intelligence.
 
@@ -129,7 +140,7 @@ Generate a comprehensive product knowledge JSON with this EXACT structure:
     },
     {
       "angle_type": "social_proof",
-      "angle_subtype": "testimonial",
+      "angle_subtype": "aggregate_proof",
       "title": "Angle title",
       "hook": "Opening hook line",
       "target_persona": "persona_1"
@@ -147,11 +158,46 @@ Generate a comprehensive product knowledge JSON with this EXACT structure:
       "title": "Angle title",
       "hook": "Opening hook line",
       "target_persona": "persona_2"
+    },
+    {
+      "angle_type": "testimonial_ugc",
+      "angle_subtype": "customer_quote",
+      "title": "Angle title",
+      "hook": "Real customer voice hook",
+      "target_persona": "persona_1"
+    },
+    {
+      "angle_type": "review_card",
+      "angle_subtype": "star_review",
+      "title": "Angle title",
+      "hook": "5-star review excerpt hook",
+      "target_persona": "persona_2"
+    },
+    {
+      "angle_type": "stat_callout",
+      "angle_subtype": "bold_number",
+      "title": "Angle title",
+      "hook": "Striking statistic or result hook",
+      "target_persona": "persona_3"
+    },
+    {
+      "angle_type": "comparison_table",
+      "angle_subtype": "feature_matrix",
+      "title": "Angle title",
+      "hook": "Side-by-side comparison hook",
+      "target_persona": "persona_1"
+    },
+    {
+      "angle_type": "us_vs_them",
+      "angle_subtype": "direct_competitor",
+      "title": "Angle title",
+      "hook": "Why we win vs the alternative",
+      "target_persona": "persona_2"
     }
   ]
 }
 
-Generate AT LEAST ${angleCount} ad_angle_ideas total (${perType} per angle_type: benefit, emotional, social_proof, urgency, storytelling).
+Generate AT LEAST ${angleCount} ad_angle_ideas total (${perType} per angle_type: benefit, emotional, social_proof, urgency, storytelling, testimonial_ugc, review_card, stat_callout, comparison_table, us_vs_them).
 Return ONLY valid JSON, no markdown fences, no explanation.`;
 
   const text = await callLLM(prompt, 4000);
@@ -206,22 +252,33 @@ ${anglesStr}
 
 IMAGE PROMPT RULES — this is the most important part:
 
-For "ad_graphic" type:
-Describe a COMPLETE designed ad graphic exactly as it should look on a ${canvasLabel} — as if briefing a designer. Include ALL of these elements:
+Describe a COMPLETE designed ad graphic exactly as it should look on a ${canvasLabel} — as if briefing a designer. Always include:
 1. BACKGROUND: color, gradient, or texture (e.g. "warm cream linen background #F5F0E8")
 2. PRODUCT PLACEMENT: where the product image sits, angle, size, any shadow/glow
-3. HEADLINE TEXT: exact text to render in large bold typography, font style (e.g. "serif italic"), color, position
-4. SUPPORTING STATS/COPY: exact numbers/text to display as designed callouts (e.g. "14g protein" in large numerals with small label)
-5. CTA ELEMENT: button or badge design with exact text, colors, position
-6. OVERALL STYLE: e.g. "clean DTC brand aesthetic", "bold high-contrast performance", "warm lifestyle wellness"
-Be extremely specific. This prompt gets sent directly to an AI image model. 200-300 words.
+3. HEADLINE TEXT: exact text, font style, color, position
+4. CTA ELEMENT: button or badge with exact text, colors, position
+5. OVERALL STYLE: e.g. "clean DTC brand aesthetic", "bold high-contrast performance"
+
+Then apply these ANGLE-SPECIFIC layout rules:
+
+- testimonial_ugc: Design as a UGC-style ad. Show a raw, authentic customer photo or selfie context in the background. Overlay a speech-bubble or caption card with a real-sounding customer quote in conversational language. Include the customer's first name and a small avatar or profile photo element. Feels organic, not polished.
+
+- review_card: Design as a review screenshot card. Show a styled card with 5 gold stars at the top, a 2-3 sentence verified review quote in quotation marks, reviewer name and location below, and the product image small in the corner. Clean white card on colored background.
+
+- stat_callout: Lead with ONE massive bold statistic (e.g. "97%", "2x faster", "10,000+ sold") as the hero element — huge numerals dominating the canvas. Supporting micro-copy explains the stat. Minimal design, maximum impact. Product image secondary.
+
+- comparison_table: Design a clean 2-column comparison table. Left column header = "Others" (with ✗ marks for missing features). Right column header = product name (with ✓ checkmarks for each feature). 4-5 rows of features. Bold border or highlight on the product column. Product image above or beside the table.
+
+- us_vs_them: Split the canvas into two halves. Left side = dull/grey/frustrated scenario without the product. Right side = vibrant/bright/happy scenario with the product. A bold dividing line or "VS" badge in the center. Product image featured prominently on the right side.
+
+Be extremely specific. This prompt goes directly to an AI image model. 200-300 words.
 
 Return a JSON array of exactly ${count} objects with this structure:
 [
   {
     "id": "creative_${String(startIdx + 1).padStart(3, '0')}",
     "angle_type": "benefit",
-    "angle_subtype": "problem_solution",
+    "angle_subtype": "problem_solution | aspiration | aggregate_proof | scarcity | transformation | customer_quote | star_review | bold_number | feature_matrix | direct_competitor",
     "creative_type": "ad_graphic",
     "headline": "Short punchy headline",
     "body_copy": "2-3 sentence ad copy that sells",
