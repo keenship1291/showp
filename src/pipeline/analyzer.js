@@ -14,6 +14,16 @@ const ANGLE_TYPES = [
   'us_vs_them',
 ];
 
+// Maps each user-facing outcome to the 4 angle types used for concept generation
+const OUTCOME_ANGLES = {
+  highlight_benefits: ['benefit', 'stat_callout', 'comparison_table', 'emotional'],
+  build_trust:        ['social_proof', 'testimonial_ugc', 'review_card', 'stat_callout'],
+  crush_competitors:  ['comparison_table', 'us_vs_them', 'benefit', 'stat_callout'],
+  show_results:       ['storytelling', 'stat_callout', 'testimonial_ugc', 'benefit'],
+  drive_sales:        ['urgency', 'benefit', 'emotional', 'social_proof'],
+  stop_scroll:        ['emotional', 'storytelling', 'urgency', 'benefit'],
+};
+
 const ASPECT_RATIO_LABELS = {
   '1:1':  'Square 1:1',
   '9:16': 'Vertical 9:16 (Story/Reel)',
@@ -208,7 +218,7 @@ Return ONLY valid JSON, no markdown fences, no explanation.`;
 // Mirrors skill's concepts.js — generates exactly `count` ad_graphic concepts.
 // Uses the skill's exact prompt format for superior output quality.
 
-export async function generateConceptsForBrand(product, knowledge, count, aspectRatio = '1:1') {
+export async function generateConceptsForBrand(product, knowledge, count, aspectRatio = '1:1', outcome = 'highlight_benefits') {
   const indices = Array.from({ length: count }, (_, i) => i);
   const batches = chunkArray(indices, 10);
   const allConcepts = [];
@@ -216,7 +226,7 @@ export async function generateConceptsForBrand(product, knowledge, count, aspect
   for (let b = 0; b < batches.length; b++) {
     const startIdx = b * 10;
     const batchSize = batches[b].length;
-    const batchConcepts = await generateConceptBatch(knowledge, batchSize, startIdx, aspectRatio);
+    const batchConcepts = await generateConceptBatch(knowledge, batchSize, startIdx, aspectRatio, outcome);
     allConcepts.push(...batchConcepts);
   }
 
@@ -228,11 +238,12 @@ export async function generateConceptsForBrand(product, knowledge, count, aspect
   }));
 }
 
-async function generateConceptBatch(knowledge, count, startIdx, aspectRatio) {
+async function generateConceptBatch(knowledge, count, startIdx, aspectRatio, outcome = 'highlight_benefits') {
   const canvasLabel = (ASPECT_RATIO_LABELS[aspectRatio] || aspectRatio) + ' ad canvas';
 
+  const outcomeAngles = OUTCOME_ANGLES[outcome] || OUTCOME_ANGLES.highlight_benefits;
   const anglesStr = Array.from({ length: count }, (_, i) => {
-    const angleType = ANGLE_TYPES[(startIdx + i) % ANGLE_TYPES.length];
+    const angleType = outcomeAngles[(startIdx + i) % outcomeAngles.length];
     return `${startIdx + i + 1}. angle_type: ${angleType}`;
   }).join('\n');
 
@@ -247,7 +258,9 @@ Requirements:
 - Follow these assigned angles exactly (in order):
 ${anglesStr}
 - Each concept must be unique with a different hook/angle
-- Headlines should be punchy (under 40 chars), body copy concise (2-3 sentences)
+- headline: under 40 characters, ideally ~27 chars — punchy Facebook feed headline
+- primary_text: under 125 characters — the Meta Ads "Primary Text" caption that appears above the ad; direct, conversational, no truncation on mobile
+- image_text_overlay: exactly 3–5 punchy words shown as the hero text ON the image itself (e.g. "Stop Wasting Your Time", "Finally. Real Results.")
 - ALL concepts must be "ad_graphic" type (full designed ad)
 
 IMAGE PROMPT RULES — this is the most important part:
@@ -282,10 +295,11 @@ Return a JSON array of exactly ${count} objects with this structure:
     "angle_type": "benefit",
     "angle_subtype": "problem_solution | aspiration | aggregate_proof | scarcity | transformation | customer_quote | star_review | bold_number | feature_matrix | direct_competitor",
     "creative_type": "ad_graphic",
-    "headline": "Short punchy headline",
-    "body_copy": "2-3 sentence ad copy that sells",
+    "headline": "Under 40 chars, ideally ~27 — Facebook feed headline",
+    "primary_text": "Under 125 chars — Meta Ads primary text caption, no truncation",
+    "image_text_overlay": "3-5 punchy words for hero text ON the image",
     "cta": "Shop Now",
-    "image_prompt": "Full detailed prompt as described above",
+    "image_prompt": "Full detailed prompt as described above. MUST include the image_text_overlay text as the large hero text prominently displayed on the image.",
     "target_persona": "persona_1"
   }
 ]

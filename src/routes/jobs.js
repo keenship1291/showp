@@ -17,7 +17,7 @@ const MAX_BASE64_BYTES    = 10 * 1024 * 1024; // 10 MB decoded limit
 // ── POST /api/jobs ─────────────────────────────────────────────
 // Start a new ad creative generation job.
 router.post('/', validateApiKey, async (req, res) => {
-  const { url, count, aspectRatio, resolution, pageProductData, userSelectedImageUrl, userImageBase64, userImageMimeType } = req.body;
+  const { url, count, aspectRatio, resolution, outcome, pageProductData, userSelectedImageUrl, userImageBase64, userImageMimeType } = req.body;
 
   if (!url || typeof url !== 'string' || !url.startsWith('http')) {
     return res.status(400).json({ error: 'url must be a valid HTTP/HTTPS URL' });
@@ -34,6 +34,8 @@ router.post('/', validateApiKey, async (req, res) => {
   const safeCount = parsedCount;
   const safeAspectRatio = VALID_ASPECT_RATIOS.has(aspectRatio) ? aspectRatio : '1:1';
   const safeResolution = VALID_RESOLUTIONS.has(resolution) ? resolution : '1K';
+  const VALID_OUTCOMES = new Set(['highlight_benefits','build_trust','crush_competitors','show_results','drive_sales','stop_scroll']);
+  const safeOutcome = VALID_OUTCOMES.has(outcome) ? outcome : 'highlight_benefits';
 
   const jobId = nanoid(16);
 
@@ -76,6 +78,7 @@ router.post('/', validateApiKey, async (req, res) => {
     count: safeCount,
     aspectRatio: safeAspectRatio,
     resolution: safeResolution,
+    outcome: safeOutcome,
     pageProductData: pageProductData || null,
     userSelectedImageUrl: resolvedImageUrl,
   });

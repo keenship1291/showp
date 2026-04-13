@@ -72,7 +72,7 @@ async function processResizeJob(job) {
 
 async function processPipelineJob(job) {
   const {
-    jobId, url, count, aspectRatio, resolution,
+    jobId, url, count, aspectRatio, resolution, outcome,
     pageProductData, userSelectedImageUrl,
   } = job.data;
 
@@ -126,7 +126,7 @@ async function processPipelineJob(job) {
   await updateJob(jobId, { status: 'concepts', phase: 'concepts' });
   console.log(`[worker:${jobId}] Generating ${count} creative concepts...`);
 
-  const concepts = await generateConceptsForBrand(product, knowledge, count, aspectRatio);
+  const concepts = await generateConceptsForBrand(product, knowledge, count, aspectRatio, outcome);
   console.log(`[worker:${jobId}] Generated ${concepts.length} concepts (all ad_graphic)`);
 
   // ── Phase 4: Image generation ────────────────────────────────
