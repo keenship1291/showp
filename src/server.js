@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { jobsRouter } from './routes/jobs.js';
 import { resizeRouter } from './routes/resize.js';
+import { modifyRouter } from './routes/modify.js';
 import { healthRouter } from './routes/health.js';
 import { startWorker } from './queue/worker.js';
 
@@ -60,6 +61,7 @@ app.use('/images', express.static(config.imagesDir, {
 // ── Routes ─────────────────────────────────────────────────────
 app.use('/api/jobs', jobsRouter);
 app.use('/api/resize', resizeRouter);
+app.use('/api/modify', modifyRouter);
 app.use('/health', healthRouter);
 
 // ── 404 ────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { createBullConnection } from '../storage/redis.js';
 import { scrapeShopifyProduct, normalizePageProductData } from '../pipeline/scraper.js';
 import { analyzeProductKnowledge, generateConceptsForBrand } from '../pipeline/analyzer.js';
-import { generateImages } from '../pipeline/generator.js';
+import { generateImages, generateModifiedImage } from '../pipeline/generator.js';
 import { generateResizedVersions } from '../pipeline/resizer.js';
 import { updateJob, appendImage } from '../storage/jobStore.js';
 import { config } from '../config.js';
@@ -35,11 +35,33 @@ export async function startWorker() {
 }
 
 async function processJob(job) {
-  // Route to the correct handler based on job type
-  if (job.data.type === 'resize') {
-    return processResizeJob(job);
-  }
+  if (job.data.type === 'resize')  return processResizeJob(job);
+  if (job.data.type === 'modify')  return processModifyJob(job);
   return processPipelineJob(job);
+}
+
+// ── Modify job ─────────────────────────────────────────────────
+
+async function processModifyJob(job) {
+  const { jobId, imageUrl, modifyPrompt, aspectRatio, resolution } = job.data;
+
+  await updateJob(jobId, { status: 'generating', phase: 'generating', total: 1, current: 0 });
+  console.log(`[worker:${jobId}] Modify job: "${modifyPrompt.substring(0, 60)}..." @ ${aspectRatio} ${resolution}`);
+
+  try {
+    const result = await generateModifiedImage(imageUrl, modifyPrompt, jobId, aspectRatio, resolution);
+    await appendImage(jobId, {
+      id: 'modified',
+      url: result.publicUrl,
+      headline: '',
+      angle_type: 'modified',
+    });
+    await updateJob(jobId, { status: 'done', phase: 'done', current: 1, total: 1 });
+    console.log(`[worker:${jobId}] Modify complete → ${result.publicUrl}`);
+  } catch (err) {
+    await updateJob(jobId, { status: 'failed', phase: 'failed', error: err.message });
+    console.error(`[worker:${jobId}] Modify failed:`, err.message);
+  }
 }
 
 // ── Resize job ─────────────────────────────────────────────────

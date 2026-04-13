@@ -73,6 +73,20 @@ export async function generateImages(concepts, productData, jobId, aspectRatio, 
   }
 }
 
+// ── Modify (img2img) ───────────────────────────────────────────
+// Takes an existing image as reference and applies the user's modification prompt.
+
+export async function generateModifiedImage(imageUrl, modifyPrompt, jobId, aspectRatio, resolution) {
+  const jobDir = path.join(config.imagesDir, jobId);
+  await fs.mkdir(jobDir, { recursive: true });
+
+  const taskId = await createKieTask(modifyPrompt, aspectRatio, resolution, [imageUrl]);
+  const kieUrl = await pollKieTask(taskId);
+  await downloadAndSave(kieUrl, jobDir, 'modified');
+
+  return { publicUrl: `${config.imageBaseUrl}/images/${jobId}/modified.jpg` };
+}
+
 // ── Per-image pipeline ─────────────────────────────────────────
 
 async function generateOneImage(concept, jobId, jobDir, aspectRatio, resolution, productImageUrls) {
