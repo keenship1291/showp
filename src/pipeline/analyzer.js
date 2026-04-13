@@ -24,6 +24,77 @@ const OUTCOME_ANGLES = {
   stop_scroll:        ['emotional', 'storytelling', 'urgency', 'benefit'],
 };
 
+// Full goal context injected into the concept prompt so the LLM aligns
+// copy tone, hooks, image style, and CTA direction to the merchant's goal.
+const OUTCOME_CONTEXT = {
+  highlight_benefits: {
+    label: 'HIGHLIGHT PRODUCT BENEFITS (Feature Breakdown)',
+    directive: `The merchant's goal is to clearly communicate what this product does and why those features matter.
+Every concept must:
+- Lead with a specific, tangible benefit or feature — not vague praise
+- Use copy that educates and excites: "Here's exactly what you get"
+- Image style: clean, product-forward, features annotated or demonstrated
+- Headlines should name the benefit directly (e.g. "Zero Waste. Zero Guilt.")
+- Primary text should spell out the key advantage in plain language
+- CTAs: "See How It Works", "Shop Features", "Learn More"`,
+  },
+  build_trust: {
+    label: 'BUILD CUSTOMER TRUST (Community & Social Proof)',
+    directive: `The merchant's goal is to make new customers feel safe buying — using real people, reviews, and community.
+Every concept must:
+- Lean heavily on social proof signals: star ratings, customer quotes, community size, verified reviews
+- Copy tone: warm, relatable, peer-to-peer — NOT corporate
+- Image style: authentic UGC aesthetic, real customer faces/quotes, review cards
+- Headlines should reflect customer voice (e.g. "10,000+ Happy Customers")
+- Primary text should include a real-sounding testimonial or aggregate stat
+- CTAs: "Join the Community", "See Reviews", "Try Risk-Free"`,
+  },
+  crush_competitors: {
+    label: 'CRUSH COMPETITORS (Compare Solutions)',
+    directive: `The merchant's goal is to show why this product wins vs. alternatives — direct, confident, comparative.
+Every concept must:
+- Draw a clear contrast between this product and "the old way" or competitors
+- Copy tone: bold, confident, slightly provocative — "Why settle for less?"
+- Image style: comparison tables, side-by-side visuals, "us vs them" splits
+- Headlines should set up the contrast (e.g. "Other Brands Guess. We Guarantee.")
+- Primary text should name a specific shortcoming of alternatives and flip it
+- CTAs: "See the Difference", "Compare Now", "Switch Today"`,
+  },
+  show_results: {
+    label: 'SHOW REAL RESULTS (Transformations)',
+    directive: `The merchant's goal is to prove the product works by showing before/after outcomes and real transformations.
+Every concept must:
+- Make the result the hero — lead with the outcome, not the product
+- Copy tone: aspirational but grounded — "Real people, real results"
+- Image style: transformation visuals, bold result stats, before/after layouts
+- Headlines should state the transformation (e.g. "From Struggling to Thriving")
+- Primary text should describe a specific, believable result
+- CTAs: "Get Your Results", "Start Your Transformation", "See It Work"`,
+  },
+  drive_sales: {
+    label: 'DRIVE IMMEDIATE SALES (Promote an Offer)',
+    directive: `The merchant's goal is to convert right now — urgency, scarcity, and an irresistible offer are the levers.
+Every concept must:
+- Create a sense of urgency or scarcity: limited time, limited stock, exclusive deal
+- Copy tone: direct, punchy, action-oriented — every word earns its place
+- Image style: bold price callouts, countdown energy, offer badges, high contrast
+- Headlines should trigger FOMO (e.g. "Sale Ends Tonight", "Only 12 Left")
+- Primary text should state the offer clearly with a reason to act NOW
+- CTAs: "Grab the Deal", "Shop Now — Ends Soon", "Claim Your Discount"`,
+  },
+  stop_scroll: {
+    label: 'STOP THE SCROLL (Create Curiosity)',
+    directive: `The merchant's goal is pattern interruption — these ads must be impossible to scroll past.
+Every concept must:
+- Open with a hook that creates an open loop or curiosity gap — the viewer MUST know more
+- Copy tone: unexpected, slightly provocative, conversational — like a friend texting you
+- Image style: bold, unexpected compositions, strong contrast, visual tension or surprise
+- Headlines should be a question, bold claim, or unfinished thought (e.g. "You've been doing it wrong.")
+- Primary text should deepen the curiosity without giving everything away
+- CTAs: "Find Out Why", "See For Yourself", "Discover the Secret"`,
+  },
+};
+
 const ASPECT_RATIO_LABELS = {
   '1:1':  'Square 1:1',
   '9:16': 'Vertical 9:16 (Story/Reel)',
@@ -248,13 +319,18 @@ async function generateConceptBatch(knowledge, count, startIdx, aspectRatio, out
   }).join('\n');
 
   const knowledgeStr = knowledge ? JSON.stringify(knowledge, null, 2).substring(0, 12000) : '{}';
+  const outcomeCtx = OUTCOME_CONTEXT[outcome] || OUTCOME_CONTEXT.highlight_benefits;
 
   const prompt = `You are an expert Meta/Facebook ad creative director and graphic designer. Using the product knowledge below, generate exactly ${count} ad creative concepts.
+
+CAMPAIGN GOAL: ${outcomeCtx.label}
+${outcomeCtx.directive}
 
 PRODUCT KNOWLEDGE:
 ${knowledgeStr}
 
 Requirements:
+- The CAMPAIGN GOAL above is the north star — every concept (copy, image, tone, CTA) must serve it
 - Follow these assigned angles exactly (in order):
 ${anglesStr}
 - Each concept must be unique with a different hook/angle
