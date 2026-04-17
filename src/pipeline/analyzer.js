@@ -14,6 +14,112 @@ const ANGLE_TYPES = [
   'us_vs_them',
 ];
 
+// Per-angle image layout templates. Two options per angle — LLM picks the best fit
+// for the specific concept and fills every [PLACEHOLDER] with real product data.
+const ANGLE_IMAGE_TEMPLATES = {
+  benefit: `
+TEMPLATE A — Features/Benefits Point-Out (Educational diagram style):
+Use the attached product images as brand reference. Create: an educational diagram-style ad on white background. Top: bold [BRAND COLOR] text "[HEADER like What Makes [PRODUCT] Different]". Below: [PRODUCT] centered, even studio lighting. Four callout boxes with connecting lines: "[BENEFIT 1–4 from product USPs]". Each has a small [BRAND COLOR] circle. "[WEBSITE/DOMAIN]" bottom center. [BRAND] logo bottom right. Scientific diagram redesigned by a luxury agency.
+
+TEMPLATE B — Feature Arrow Callout / Product Annotation:
+Use the attached product images as brand reference. Create: a product annotation ad on a [warm cream/light background matching brand] background. Top: italic serif headline "[BENEFIT STATEMENT from product USPs]" in [BRAND COLOR]. Below in massive bold sans-serif: "[VALUE PROP — 2-4 words]". Center: [PERSON'S HAND] holding [PRODUCT] at a natural angle. Four curved arrows in [BRAND COLOR] pointing from the product outward to four benefit callout labels arranged around it: "[CALLOUT 1–4 from product features]". Arrows feel hand-drawn or editorial. Bottom: full-width [CONTRAST COLOR] banner with promo/claim text in bold.
+
+TEMPLATE C — Faux iPhone Notes / App Screenshot (Educational benefit list):
+Use the attached product images as brand reference. Create: a static ad disguised as an iPhone Notes app screenshot. Top: realistic iOS status bar (time, signal bars, wifi, battery). Below: iOS Notes navigation — blue "< All iCloud" back arrow left, share icon and three-dot menu right. Below nav: small gray timestamp. Main content area on white: bold black serif headline "[HEADLINE — In Just [USAGE] / What [PRODUCT] Does In [TIMEFRAME]]". Below: [3–4 BENEFIT ROWS], each with a [BRAND COLOR] filled circle checkmark + [RELEVANT EMOJI] + bold black text using equivalency or plain-language format: "[BENEFIT 1 from product USPs]" / "[BENEFIT 2]" / "[BENEFIT 3]" / "[BENEFIT 4]". Right side, overlapping the benefit text slightly: [PRODUCT] at a slight angle with [DETAIL like key ingredients or product contents] spilling at the base. Product casually placed into the note layout, breaking the frame slightly. Clean white background throughout.
+
+Pick whichever template best suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  emotional: `
+TEMPLATE A — Bold Statement / Reaction Headline:
+Use the attached product images as brand reference. Create: a static ad on a vibrant [gradient matching brand — e.g. coral-pink to golden-yellow OR brand primary to secondary] gradient background, flowing diagonally. Upper left: oversized playful [rounded retro font style] headline in white reading "[BOLD PROVOCATIVE STATEMENT — emotional, under 10 words, no asterisks]". Right side: [PERSON'S HAND or LIFESTYLE ACTION] interacting with [PRODUCT]. Product sits center-right. Bottom left: [BRAND] logo with "[SHORT PRODUCT DESCRIPTOR]" below. No stats, no badges. The gradient and the headline do all the work.
+
+TEMPLATE B — Negative Marketing / Bait & Switch (Scroll-stopper):
+Use the attached product images as brand reference. Create: background is close-up of [PRODUCT], slightly blurred. Center: white rounded-rectangle review card (platform-style). Gray user icon, "[REVIEWER NAME]", one gold star + four gray, orange "Verified Purchase" badge, bold text: "[BAIT HEADLINE — sounds negative but is actually a rave, e.g. 'I'm FURIOUS this worked so fast']". Bottom: bold white sans-serif "[PUNCHLINE — 4–6 words, punchy]". [BRAND] logo bottom right.
+
+TEMPLATE C — Curiosity Gap / Scroll-Stopper Hook (No product visible):
+Do NOT include any product, logo, or branding. Create: a scroll-stopping curiosity ad designed to look like a truncated social media post. Top 35%: clean white background with large bold black sans-serif text (heavy weight, tight leading): "[HOOK HEADLINE — Most [TARGET PERSONA] don't realize THIS is why [PAIN POINT related to product category]... but did you know]". The last few words followed by "...more" in lighter gray text, mimicking a truncated caption requiring a click to expand. Bottom 65%: a close-up, slightly uncomfortable or attention-grabbing editorial photo of [PROBLEM VISUAL — the specific physical symptom or struggle the product solves, shown on subject, no product]. Slightly shallow depth of field, real and editorial — not stock. No text on photo. No CTA. The entire purpose is to provoke curiosity and earn the click.
+
+Pick whichever template best suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  social_proof: `
+TEMPLATE A — Social Proof Stack (Trust + Community):
+Use the attached product images as brand reference. Create: a social proof ad on [warm cream or brand-light background]. Top: "[HEADLINE — Join X+ Members / Trusted by X / Rated #1 for X]" in bold [BRAND COLOR]. Five filled stars with "Rated [X] out of 5". Center: [PRODUCT] at 50mm f/4. Below: frosted white card with five-star rating, "[REVIEW TITLE]", "[2–3 sentence review]", "[REVIEWER ATTRIBUTION]" in italic. Below card: "As Seen In" or "As Featured In" with five grayscale publication/media logo placeholders. [BRAND] logo bottom right.
+
+TEMPLATE B — Faux Press / News Article Screenshot:
+Use the attached product images as brand reference. Create: a static ad designed to look like a real online news article screenshot. Top 25%: white background with a realistic publication masthead in large bold black serif text [e.g. "TODAY" or "INSIDER" style — do NOT use real publication names, invent a plausible-looking one]. Below: thin gray horizontal rule. Small gray text "Latest Headlines". Then: bold black serif headline: "['It's my holy grail': The $[PRICE] [PRODUCT CATEGORY] with [SOCIAL PROOF STAT like 'thousands of 5-star reviews']]". Bottom 60%: two side-by-side casual UGC-style photos of [PEOPLE — two different customers] each holding [PRODUCT] in casual selfie poses — natural light. Should look like an organic article someone would share.
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  urgency: `
+TEMPLATE A — Offer/Promotion (The money-maker):
+Use the attached product images as brand reference. Create: a promotional ad with a split background. Top 60% is [PRIMARY BRAND COLOR] and bottom 40% is [CONTRAST COLOR like warm cream]. [PRODUCT] sits centered where colors meet, soft studio lighting. Upper area: large [CONTRAST TEXT] sans-serif reading "[OFFER HEADLINE — e.g. YOUR FIRST MONTH FREE / SAVE 40% TODAY ONLY]". Below: "[OFFER DETAILS — specific, clear]". Lower section: small [BRAND COLOR] text with [VALUE ADDS — e.g. free shipping, guarantee]. [BRAND] logo bottom right.
+
+TEMPLATE B — Hero Statement + Icon Bar + Offer Burst:
+Use the attached product images as brand reference. Create: a promotional variant on a [dark charcoal/moody OR brand dark color] background. Top: white banner with massive bold uppercase headline: "[PROVOCATIVE 2–3 WORD STATEMENT]" with a period for punch. Upper area: a [BRIGHT ACCENT COLOR like neon green/lime] comic-style starburst badge rotated slightly, reading "GET UP TO [DISCOUNT]% OFF" or "[OFFER]". Center: [PERSON'S HAND] gripping [PRODUCT] from above. Bottom: three evenly spaced icon-and-text benefit columns. Very bottom: full-width [BRIGHT ACCENT COLOR] banner: "[PROMO NAME — e.g. FLASH SALE / LIMITED OFFER]".
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  storytelling: `
+TEMPLATE A — Before & After (UGC Native / TikTok-style):
+Use the attached product images as brand reference for product color ONLY. This should look like a real person's post. Create: TikTok-style before-and-after. LEFT: grainy iPhone mirror selfie, [PERSON] in dimly lit setting, [BEFORE STATE — the problem/struggle], harsh lighting. White handwritten text: "[BEFORE DATE or BEFORE STATE label]". RIGHT: same person, same setting, bright natural light, [AFTER STATE — the transformation], [PRODUCT] visible. White text: "[AFTER DATE or AFTER STATE label]". Top center: "[TIMEFRAME] with [BRAND]" with emoji. Should look stitched in CapCut — organic, not polished.
+
+TEMPLATE B — Whiteboard Before/After + Product Hold:
+Use the attached product images as brand reference for product packaging ONLY. This should look like a real person's photo. Create: a lifestyle photo in [REAL SETTING like bright kitchen or bathroom]. In background: small tabletop dry-erase whiteboard propped on [SURFACE]. On the whiteboard: two simple hand-drawn marker illustrations — left labeled "[BEFORE LABEL]" showing [BEFORE STATE sketch], arrow pointing right, labeled "[AFTER LABEL]" showing [AFTER STATE sketch]. Below drawings: handwritten "[CTA or KEY MESSAGE]". Foreground: [PERSON'S HAND] holding [PRODUCT] next to whiteboard. Shot on iPhone, natural lighting, casual and educational.
+
+TEMPLATE C — Advertorial / Editorial Content Card (Looks like organic content):
+Use the attached product images as brand reference for tone ONLY. Do NOT use polished ad layouts. This should look like organic editorial content. Create: a full-bleed moody portrait or lifestyle photo of [PERSON or SCENE relevant to the product's use case — e.g. someone using the product in a natural context], warm amber-toned lighting, shot on 50mm f/1.8, shallow depth of field, cinematic color grade with warm highlights and cool shadows. Lower 45% is a text overlay zone: a prominent white rounded-rectangle pill label reading "[CATEGORY TAG — e.g. HOT TOPIC / TRENDING / MUST READ]" in centered uppercase sans-serif. Below: very large, dominant, bold all-caps condensed sans-serif headline filling the width in white with key words in [BRAND COLOR]: "[HEADLINE — [BRAND] IS [DOING SOMETHING RELEVANT] — HERE'S WHY EVERYONE'S [RESULT/ACTION]]". Headline should be at least 35% of total frame height. Bottom center: "[@BRAND_HANDLE]" in small white text. No product shot, no CTA button, no stars. Reads like a culture/lifestyle account post, not a paid ad.
+
+TEMPLATE D — UGC + Viral Post Overlay (Reddit/Twitter screenshot):
+Use the attached product images as brand reference for product color ONLY. Do NOT use ad layouts or polish. Create: a casual selfie of [PERSON — relatable to target persona, doing something mundane like making coffee or cooking]. iPhone front camera, slightly grainy, natural indoor lighting. Overlaid in the center: a realistic screenshot of a [Reddit or Twitter/X] post. Post details: [SUBREDDIT or USERNAME], [TIMESTAMP], [UPVOTE COUNT]. Post title in bold: "[PROVOCATIVE OPINION HEADLINE — related to the product's problem/benefit space, sounds organic not promotional]". Post body in regular text: "[2–3 sentences expanding on the opinion]". The person looks like they're reacting to or sharing the post — NOT selling a product. No product visible in frame. No brand logo. No CTA. The hook is the opinion.
+
+Pick whichever template best suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  testimonial_ugc: `
+TEMPLATE A — Social Comment Screenshot + Product:
+Use the attached product images as brand reference. Create: a static ad on clean white background. Top: oversized bold black sans-serif hook headline reading "[HOOK HEADLINE — provocative, emotional, relatable to the target persona]". Center: a social media comment card with light gray rounded-rectangle background containing: a small circular profile avatar, bold name "[REVIEWER NAME]", and a multi-sentence review: "[FULL REVIEW TEXT — 3–4 sentences, conversational, emotional, touches a specific pain point and the product as the solution]". Small gray timestamp below. Bottom center: [PRODUCT] photographed at slight angle on white, soft studio lighting. Feels like someone screenshotted a real comment and dropped the product below.
+
+TEMPLATE B — Highlighted / Annotated Testimonial:
+Use the attached product images as brand reference. Create: a static ad on clean white background. Top left: circular customer headshot photo of [PERSON DESCRIPTION — generic, relatable to target persona]. To the right: bold name "[REVIEWER NAME]" with a [blue checkmark verified icon]. Below: a long-form customer quote in large regular-weight black sans-serif spanning most of the frame: "[FULL QUOTE — 3–5 sentences, authentic customer voice]". Key phrases highlighted with [HIGHLIGHT COLOR — bright lime green or neon yellow] rectangular fills: "[HIGHLIGHTED PHRASE 1]", "[HIGHLIGHTED PHRASE 2]". Bottom right: [PRODUCT] at slight angle. To the left: circular [TRUST BADGE — e.g. "100% MONEY BACK / 90 DAYS GUARANTEE"] seal.
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  review_card: `
+TEMPLATE A — Pull-Quote Review Card (Emotional quote + truncated review):
+Use the attached product images as brand reference. Create: a review-driven ad with a solid [BRAND COLOR — soft, muted tone] color block background filling the entire image. Top half: large bold italic serif text in white with curly quotation marks: "[PULL-QUOTE — the most emotional 4–8 word phrase from a review, e.g. 'I finally found something that works!']". Below quote: five large filled gold star icons in a row. Bottom left, overlapping the color background: a white rounded-corner review card with subtle shadow containing: gray circular avatar icon, bold name "[FIRST NAME + LAST INITIAL]" with [FLAG EMOJI], blue checkmark "[VERIFIED BUYER]" in small blue text, review body text in 4–6 lines of authentic customer voice trailing off with "...Read more" in bold [BRAND COLOR]. Below review: "Was this review helpful? 👍 [COUNT]". Bottom right, overlapping: [PRODUCT — full packaging] angled slightly, soft shadow.
+
+TEMPLATE B — Verified Review Card (Platform-style):
+Use the attached product images as brand reference. Create: a static ad on a solid [PRIMARY BRAND COLOR] background. Top: large bold white serif pull-quote: "[HEADLINE QUOTE — emotional, under 10 words]" in quotation marks. Below: five filled gold stars, large. Center-left: a white rounded-rectangle review card with subtle shadow: gray circular avatar, bold name "[REVIEWER NAME]" with [FLAG EMOJI], blue checkmark "[VERIFIED REVIEWER]" in brand color, 3–4 sentences of review body in regular-weight dark text. Bottom of card: "[...Read more]" in blue and "Was this review helpful? 👍 [COUNT]". Right side, overlapping the card edge: [PRODUCT] at a slight angle, soft studio lighting, gentle shadow.
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  stat_callout: `
+TEMPLATE A — Stat Surround / Callout Radial (Product Hero):
+Use the attached product images as brand reference. Create: a static ad on a white-to-[LIGHT GRADIENT COLOR matching brand — e.g. warm golden beige] gradient background, fading top to bottom. Top: large bold [BRAND TEXT COLOR] sans-serif headline: "[HEADLINE — benefit-led, one punchy sentence]". Center: [PRODUCT] on white background, soft studio lighting. Floating near product: a small circular badge reading "[PRICE POINT or KEY OFFER]". Flanking the product on both sides: four stat callouts with curved hand-drawn-style arrows pointing toward the product. Left top: "[STAT 1 — key metric]" oversized bold + "[LABEL]" below. Left bottom: "[STAT 2]" + "[LABEL]". Right top: "[STAT 3]" + "[LABEL]". Right bottom: "[STAT 4]" + "[LABEL]" with five filled gold stars beneath. Arrows are simple curved lines in [ARROW COLOR like black]. Bottom: [INGREDIENT/FLAVOR PROPS] scattered for appetite/lifestyle appeal.
+
+TEMPLATE B — Stat Surround / Callout Radial (Lifestyle Flatlay):
+Use the attached product images as brand reference. Create: a static ad on white background with lifestyle flatlay. Top: bold [ACCENT COLOR] filled banner bar full width, white all-caps sans-serif: "[HEADLINE — benefit action statement]". Center: [PERSON'S HAND] holding [PRODUCT] in mid-frame. Scattered around edges: [FLATLAY PROPS related to product use — slightly out of focus] filling corners organically. Four stat callouts with curved [ACCENT COLOR] arrows pointing toward the held product: "[STAT 1] / [LABEL]", "[STAT 2] / [LABEL]", "[STAT 3] / [LABEL]", "[STAT 4] / [LABEL]" with five small gold stars on the review stat. Stats in bold black, labels in all-caps regular weight. Bright, flat studio lighting.
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  comparison_table: `
+TEMPLATE A — Comparison Grid / Table (Viral meme format):
+Use the attached product images as brand reference. Create: a structured comparison grid ad on white background. Top row divided 50/50: Left: [PRODUCT] packaging on white, slightly styled. Right: generic/unbranded competitor product on white. Below: three horizontal rows spanning full width, each divided 50/50 by a thin black vertical line and separated by thin black horizontal lines. Each row compares one attribute: Row 1: "[YOUR ADVANTAGE — specific, factual]" vs "[COMPETITOR WEAKNESS]". Row 2: "[YOUR ADVANTAGE 2]" vs "[COMPETITOR WEAKNESS 2]". Row 3: "[YOUR ADVANTAGE 3]" vs "[COMPETITOR WEAKNESS 3]". All text in bold black serif, centered in each cell. No icons, no colors, no checkmarks — the copy contrast does the work. Should feel like a meme-format comparison.
+
+TEMPLATE B — Benefit Checklist Showcase (Split product + info):
+Use the attached product images as brand reference. Create: an information-dense benefit ad, split composition. Left 45%: product shot — [PRODUCT DISPLAY with key details visible]. Shot on 50mm f/4, clean surface. Right 55%: white background. Top: [STAR RATING] with "[REVIEW COUNT like 10,000+ REVIEWS]" in [BRAND COLOR]. Brand logo. Below: [BRAND COLOR] headline: "[HEADLINE — product category benefit statement]". Then 3–4 checkmark benefit rows, each with filled [BRAND COLOR] circle checkmark + bold text: "[BENEFIT 1–4 from product USPs]". Bottom right: large rounded [ACCENT COLOR] CTA button: "[CTA like SHOP NOW]".
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+
+  us_vs_them: `
+TEMPLATE A — Us vs. Them Color Split (The definitive comparison):
+Use the attached product images as brand reference. Create: a side-by-side comparison ad divided vertically into two equal halves. Left half: [MUTED/GREY/NEUTRAL color] background. Generic unbranded competitor product [DESCRIPTION]. Header: "[COMPETITOR CATEGORY — generic label]". Below: vertical stack of 4 weaknesses, each with a red circle ✗: "[WEAKNESS 1–4 — specific, factual from product knowledge]" in bold dark uppercase. Right half: [PRIMARY BRAND COLOR] background. [PRODUCT] with dynamic energy [DETAIL — e.g. ingredient spilling, liquid pouring]. [BRAND] logo in bold white. Below product: vertical stack of 4 strengths, each with green circle ✓: "[STRENGTH 1–4 from product USPs]" in bold white uppercase. Center divider: comic-style "VS" burst graphic in [ACCENT COLOR].
+
+TEMPLATE B — Us vs Them Classic Split (Photography quality gap):
+Use the attached product images as brand reference. Create: a side-by-side divided vertically. Left: muted gray-blue background. Right: [PRIMARY BRAND COLOR]. Center top: white circle with "VS". Left header: "[COMPETITOR CATEGORY]" + generic competitor product + list with ✗ marks: "[WEAKNESS 1–5 — factual disadvantages of alternatives]". Right header: "[YOUR BRAND]" + [PRODUCT] + list with ✓ checkmarks: "[STRENGTH 1–5 from product USPs]". [BRAND] logo bottom right.
+
+Pick whichever template better suits this concept's angle_subtype. Fill ALL placeholders with real product data.`,
+};
+
 // Maps each user-facing outcome to the 4 angle types used for concept generation
 const OUTCOME_ANGLES = {
   highlight_benefits: ['benefit', 'stat_callout', 'comparison_table', 'emotional'],
@@ -318,13 +424,22 @@ async function generateConceptBatch(knowledge, count, startIdx, aspectRatio, out
   const canvasLabel = (ASPECT_RATIO_LABELS[aspectRatio] || aspectRatio) + ' ad canvas';
 
   const outcomeAngles = OUTCOME_ANGLES[outcome] || OUTCOME_ANGLES.highlight_benefits;
-  const anglesStr = Array.from({ length: count }, (_, i) => {
-    const angleType = outcomeAngles[(startIdx + i) % outcomeAngles.length];
-    return `${startIdx + i + 1}. angle_type: ${angleType}`;
-  }).join('\n');
+
+  // Build per-concept angle assignments AND collect unique angle types for template injection
+  const conceptAngles = Array.from({ length: count }, (_, i) => outcomeAngles[(startIdx + i) % outcomeAngles.length]);
+  const anglesStr = conceptAngles.map((angleType, i) => `${startIdx + i + 1}. angle_type: ${angleType}`).join('\n');
+
+  // Inject the relevant layout templates for every unique angle type in this batch
+  const uniqueAngles = [...new Set(conceptAngles)];
+  const templateSection = uniqueAngles
+    .filter(a => ANGLE_IMAGE_TEMPLATES[a])
+    .map(a => `--- LAYOUT TEMPLATES FOR angle_type: ${a} ---\n${ANGLE_IMAGE_TEMPLATES[a]}`)
+    .join('\n\n');
 
   const knowledgeStr = knowledge ? JSON.stringify(knowledge, null, 2).substring(0, 12000) : '{}';
   const outcomeCtx = OUTCOME_CONTEXT[outcome] || OUTCOME_CONTEXT.highlight_benefits;
+  const productName = knowledge?.product_summary?.name || 'the product';
+  const brandName = knowledge?.product_summary?.name?.split(' ')[0] || 'Brand';
 
   const prompt = `You are an expert Meta/Facebook ad creative director and graphic designer. Using the product knowledge below, generate exactly ${count} ad creative concepts.
 
@@ -353,28 +468,26 @@ ${anglesStr}
 
 IMAGE PROMPT RULES — this is the most important part:
 
-CRITICAL: The product is "${knowledge?.product_summary?.name || 'the product'}". You MUST refer to it by this exact name and product type in every image prompt. Never substitute a different product type (e.g. do NOT call a cup a bottle, do NOT call a mug a jar).
+CRITICAL PRODUCT IDENTITY:
+- The product is "${productName}". You MUST refer to it by this exact name and product type in every image prompt.
+- Never substitute a different product type (do NOT call a cup a bottle, a mug a jar, etc.)
+- Brand name to use: "${brandName}"
+- Canvas size: ${canvasLabel}
 
-Describe a COMPLETE designed ad graphic exactly as it should look on a ${canvasLabel} — as if briefing a designer. Always include:
-1. BACKGROUND: color, gradient, or texture (e.g. "warm cream linen background #F5F0E8")
-2. PRODUCT PLACEMENT: where the ${knowledge?.product_summary?.name || 'product'} sits, angle, size, any shadow/glow. ALWAYS name the product correctly.
-3. HEADLINE TEXT: exact text, font style, color, position
-4. CTA ELEMENT: button or badge with exact text, colors, position
-5. OVERALL STYLE: e.g. "clean DTC brand aesthetic", "bold high-contrast performance"
+HOW TO WRITE THE image_prompt:
+For each concept, use the layout templates provided below for that angle_type. Choose the template (A or B) that best matches the concept's angle_subtype and the product's nature.
 
-Then apply these ANGLE-SPECIFIC layout rules:
+Fill EVERY [PLACEHOLDER] in the template with specific, real values derived from the product knowledge:
+- Replace [BRAND COLOR] with an actual hex or color description derived from the product's packaging or brand
+- Replace [PRODUCT] with "${productName}" — never a generic substitute
+- Replace [BRAND] with "${brandName}"
+- Replace [BENEFIT 1–4], [STAT 1–4], [REVIEW TEXT], etc. with actual product USPs, features, and data from the product knowledge
+- Replace [HEADLINE], [PULL-QUOTE], [HOOK HEADLINE] with the exact text from the concept's headline or image_text_overlay
+- Specify exact hex colors, font styles (e.g. "bold condensed sans-serif"), lighting (e.g. "soft diffused studio light"), and camera angles (e.g. "85mm f/2.8 from slightly above")
+- The prompt goes directly to an AI image model — be extremely specific, 200–300 words
 
-- testimonial_ugc: Design as a UGC-style ad. Show a raw, authentic customer photo or selfie context in the background. Overlay a speech-bubble or caption card with a real-sounding customer quote in conversational language. Include the customer's first name and a small avatar or profile photo element. Feels organic, not polished.
-
-- review_card: Design as a review screenshot card. Show a styled card with 5 gold stars at the top, a 2-3 sentence verified review quote in quotation marks, reviewer name and location below, and the product image small in the corner. Clean white card on colored background.
-
-- stat_callout: Lead with ONE massive bold statistic (e.g. "97%", "2x faster", "10,000+ sold") as the hero element — huge numerals dominating the canvas. Supporting micro-copy explains the stat. Minimal design, maximum impact. Product image secondary.
-
-- comparison_table: Design a clean 2-column comparison table. Left column header = "Others" (with ✗ marks for missing features). Right column header = product name (with ✓ checkmarks for each feature). 4-5 rows of features. Bold border or highlight on the product column. Product image above or beside the table.
-
-- us_vs_them: Split the canvas into two halves. Left side = dull/grey/frustrated scenario without the product. Right side = vibrant/bright/happy scenario with the product. A bold dividing line or "VS" badge in the center. Product image featured prominently on the right side.
-
-Be extremely specific. This prompt goes directly to an AI image model. 200-300 words.
+LAYOUT TEMPLATES BY ANGLE TYPE:
+${templateSection}
 
 Return a JSON array of exactly ${count} objects with this structure:
 [
