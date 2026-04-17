@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import axios from 'axios';
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { validateApiKey } from '../middleware/auth.js';
@@ -42,7 +43,39 @@ router.post('/', validateApiKey, async (req, res) => {
   // If user uploaded a base64 image, save it to the VPS filesystem immediately
   // and pass the resulting public URL into the queue.
   // This keeps base64 out of Redis/BullMQ and gives Kie.ai a stable public URL to fetch.
-  let resolvedImageUrl = userSelectedImageUrl || null;
+  let resolvedImageUrl = null;
+
+  // Download externally-hosted images (e.g. Shopify CDN) to the VPS so Kie.ai
+  // can fetch them — Shopify CDN blocks direct server-to-server requests without
+  // browser headers, but our VPS can proxy the download and serve from IMAGE_BASE_URL.
+  if (userSelectedImageUrl) {
+    try {
+      const jobDir = path.join(config.imagesDir, jobId);
+      await fs.mkdir(jobDir, { recursive: true });
+      const imgRes = await axios.get(userSelectedImageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Referer': new URL(userSelectedImageUrl).origin + '/',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        },
+      });
+      // Detect extension from URL or Content-Type header
+      const contentType = imgRes.headers['content-type'] || '';
+      const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+      const ext = extMap[contentType.split(';')[0].trim()] || path.extname(new URL(userSelectedImageUrl).pathname).slice(1) || 'jpg';
+      const filePath = path.join(jobDir, `input.${ext}`);
+      await fs.writeFile(filePath, imgRes.data);
+      resolvedImageUrl = `${config.imageBaseUrl}/images/${jobId}/input.${ext}`;
+      console.log(`[jobs] User selected image proxied → ${resolvedImageUrl}`);
+    } catch (err) {
+      console.error(`[jobs] Failed to proxy user image for job ${jobId}: ${err.message}`);
+      // Fall back to the raw URL — Kie.ai may still be able to fetch it
+      resolvedImageUrl = userSelectedImageUrl;
+    }
+  }
+
   if (!resolvedImageUrl && userImageBase64) {
     // Reject oversized uploads before hitting the filesystem
     const decodedBytes = Math.floor(userImageBase64.length * 0.75);
